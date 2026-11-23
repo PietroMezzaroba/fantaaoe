@@ -7,7 +7,7 @@ import { ref } from 'vue'
 
 // Attivo di default a meno che l'utente non lo abbia spento esplicitamente
 export const audioAttivo = ref(localStorage.getItem('fantaage_muto') !== '1')
-export const volumeAudio = ref(Number(localStorage.getItem('fantaage_vol_v2') ?? 10))
+export const volumeAudio = ref(Number(localStorage.getItem('fantaage_vol_v3') ?? 22))
 
 let ctx = null
 

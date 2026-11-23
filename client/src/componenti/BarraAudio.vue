@@ -13,6 +13,7 @@ const ytPronto = ref(false)
 const partito = ref(false)
 let player = null
 let avvioTimer = null
+let fadeTimer = null
 
 function caricaApiYouTube() {
   return new Promise((resolve) => {
@@ -70,29 +71,35 @@ async function avviaAlClick() {
   // 1) Suono iniziale (fuoco + accordo) sempre pulito dall'inizio al volume impostato (default 10%)
   suonoIngresso()
 
-  // 2) Subito dopo il suono di benvenuto parte piano la OST di Age of Kings da 0:20 con fade-in morbido
+  // 2) Subito dopo il suono di benvenuto parte la OST di Age of Kings da 0:20
+  //    con dissolvenza lenta (~4s) da bassissimo (1%) fino al volume impostato
   const p = await assicuraPlayer()
   clearTimeout(avvioTimer)
+  clearInterval(fadeTimer)
   avvioTimer = setTimeout(() => {
     if (!audioAttivo.value) return
     try {
       const start = tracce[indice.value].inizio || 0
       p.seekTo(start, true)
-      p.setVolume(0)
+      p.setVolume(1)
       p.playVideo()
-      const target = volumeAudio.value
+      const passi = 40 // 40 x 100ms = 4 secondi di dissolvenza morbida
       let passo = 0
-      const fade = setInterval(() => {
+      fadeTimer = setInterval(() => {
         passo++
-        if (!audioAttivo.value || passo >= 10) {
-          clearInterval(fade)
+        if (!audioAttivo.value || passo >= passi) {
+          clearInterval(fadeTimer)
+          fadeTimer = null
           if (audioAttivo.value) try { p.setVolume(volumeAudio.value) } catch {}
           return
         }
-        try { p.setVolume(Math.round((target * passo) / 10)) } catch {}
-      }, 120)
+        const t = passo / passi
+        const curva = t * t // parte bassissimo e cresce gradualmente
+        const v = Math.max(1, Math.round(volumeAudio.value * curva))
+        try { p.setVolume(v) } catch {}
+      }, 100)
     } catch {}
-  }, 1350)
+  }, 1300)
 }
 
 function alPrimoGesto(e) {
@@ -116,6 +123,8 @@ function rimuoviListenerSblocco() {
 
 async function toggleAudio() {
   clearTimeout(avvioTimer)
+  clearInterval(fadeTimer)
+  fadeTimer = null
   if (audioAttivo.value && partito.value) {
     audioAttivo.value = false
     partito.value = false
@@ -142,9 +151,11 @@ async function cambiaTraccia() {
 }
 
 function cambiaVolume(e) {
+  clearInterval(fadeTimer)
+  fadeTimer = null
   const v = Number(e.target.value)
   volumeAudio.value = v
-  localStorage.setItem('fantaage_vol_v2', String(v))
+  localStorage.setItem('fantaage_vol_v3', String(v))
   try { player?.setVolume(v) } catch {}
 }
 
@@ -157,6 +168,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   clearTimeout(avvioTimer)
+  clearInterval(fadeTimer)
   rimuoviListenerSblocco()
   try { player?.destroy() } catch {}
 })
