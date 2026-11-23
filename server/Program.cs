@@ -78,7 +78,10 @@ if (Uri.TryCreate(accesso.IndirizzoPubblico, UriKind.Absolute, out var pubblico)
 }
 
 app.UseDefaultFiles();
-app.UseStaticFiles();
+var tipiFile = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+tipiFile.Mappings[".glb"] = "model/gltf-binary";
+tipiFile.Mappings[".gltf"] = "model/gltf+json";
+app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = tipiFile });
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseOutputCache();
