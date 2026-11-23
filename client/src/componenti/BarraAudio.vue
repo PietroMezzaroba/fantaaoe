@@ -70,7 +70,7 @@ async function avviaAlClick() {
   // 1) Suono iniziale (fuoco + accordo) sempre pulito dall'inizio al volume impostato (default 10%)
   suonoIngresso()
 
-  // 2) Subito dopo il suono iniziale parte la OST di Age of Kings pulita da 0:20
+  // 2) Subito dopo il suono di benvenuto parte piano la OST di Age of Kings da 0:20 con fade-in morbido
   const p = await assicuraPlayer()
   clearTimeout(avvioTimer)
   avvioTimer = setTimeout(() => {
@@ -78,10 +78,21 @@ async function avviaAlClick() {
     try {
       const start = tracce[indice.value].inizio || 0
       p.seekTo(start, true)
-      p.setVolume(volumeAudio.value)
+      p.setVolume(0)
       p.playVideo()
+      const target = volumeAudio.value
+      let passo = 0
+      const fade = setInterval(() => {
+        passo++
+        if (!audioAttivo.value || passo >= 10) {
+          clearInterval(fade)
+          if (audioAttivo.value) try { p.setVolume(volumeAudio.value) } catch {}
+          return
+        }
+        try { p.setVolume(Math.round((target * passo) / 10)) } catch {}
+      }, 120)
     } catch {}
-  }, 1150)
+  }, 1350)
 }
 
 function alPrimoGesto(e) {

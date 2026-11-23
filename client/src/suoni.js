@@ -34,64 +34,65 @@ function scalaGain() {
   return Math.max(0.02, Math.min(1, volumeAudio.value / 100))
 }
 
-// Effetto fuoco/fiamma + accordo medievale d'ingresso
+// Effetto fuoco/fiamma + accordo medievale di benvenuto (bello pieno e presente)
 export function suonoIngresso() {
   const c = ottieniCtx()
   if (!c) return
   const now = c.currentTime
-  const vol = scalaGain()
+  // Il suono di benvenuto si sente bene (almeno ~0.75 anche se il sottofondo OST è basso al 10%)
+  const vol = volumeAudio.value <= 0 ? 0 : Math.max(0.75, scalaGain())
 
-  // 1) Fiamma (rumore filtrato con sweep passa-banda + crepitio morbido)
-  const durFuoco = 1.45
+  // 1) Fiamma (rumore caldo filtrato con sweep passa-banda + crepitii)
+  const durFuoco = 1.5
   const buf = c.createBuffer(1, Math.floor(c.sampleRate * durFuoco), c.sampleRate)
   const data = buf.getChannelData(0)
   let ultimo = 0
   for (let i = 0; i < data.length; i++) {
     const bianco = Math.random() * 2 - 1
-    ultimo = (ultimo + 0.08 * bianco) / 1.08 // rumore caldo (brownish)
-    const scintilla = Math.random() > 0.9965 ? (Math.random() * 2 - 1) * 0.45 : 0
-    data[i] = ultimo * 2.2 + scintilla
+    ultimo = (ultimo + 0.09 * bianco) / 1.09
+    const scintilla = Math.random() > 0.995 ? (Math.random() * 2 - 1) * 0.55 : 0
+    data[i] = ultimo * 2.5 + scintilla
   }
   const src = c.createBufferSource()
   src.buffer = buf
 
   const filtro = c.createBiquadFilter()
   filtro.type = 'bandpass'
-  filtro.frequency.setValueAtTime(180, now)
-  filtro.frequency.exponentialRampToValueAtTime(720, now + 0.35)
-  filtro.frequency.exponentialRampToValueAtTime(260, now + durFuoco)
-  filtro.Q.value = 1.1
+  filtro.frequency.setValueAtTime(200, now)
+  filtro.frequency.exponentialRampToValueAtTime(850, now + 0.32)
+  filtro.frequency.exponentialRampToValueAtTime(280, now + durFuoco)
+  filtro.Q.value = 1.0
 
   const gFuoco = c.createGain()
   gFuoco.gain.setValueAtTime(0.001, now)
-  gFuoco.gain.linearRampToValueAtTime(0.32 * vol, now + 0.18)
+  gFuoco.gain.linearRampToValueAtTime(0.42 * vol, now + 0.16)
   gFuoco.gain.exponentialRampToValueAtTime(0.001, now + durFuoco)
 
   src.connect(filtro).connect(gFuoco).connect(c.destination)
   src.start(now)
   src.stop(now + durFuoco)
 
-  // 2) Accordo medievale aperto (D3, A3, D4, F#4) con timbro caldo a triangolo
+  // 2) Accordo medievale di benvenuto (D3, A3, D4, F#4) pieno e caldo
   const note = [146.83, 220.0, 293.66, 369.99]
   note.forEach((freq, idx) => {
-    const t0 = now + 0.25 + idx * 0.07
+    const t0 = now + 0.22 + idx * 0.075
     const osc = c.createOscillator()
     osc.type = idx === 0 ? 'sawtooth' : 'triangle'
     osc.frequency.setValueAtTime(freq, t0)
 
     const lp = c.createBiquadFilter()
     lp.type = 'lowpass'
-    lp.frequency.setValueAtTime(1200, t0)
-    lp.frequency.exponentialRampToValueAtTime(420, t0 + 1.5)
+    lp.frequency.setValueAtTime(1600, t0)
+    lp.frequency.exponentialRampToValueAtTime(480, t0 + 1.6)
 
     const g = c.createGain()
     g.gain.setValueAtTime(0.0001, t0)
-    g.gain.linearRampToValueAtTime((idx === 0 ? 0.09 : 0.11) * vol, t0 + 0.06)
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.6)
+    g.gain.linearRampToValueAtTime((idx === 0 ? 0.14 : 0.18) * vol, t0 + 0.05)
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.65)
 
     osc.connect(lp).connect(g).connect(c.destination)
     osc.start(t0)
-    osc.stop(t0 + 1.65)
+    osc.stop(t0 + 1.7)
   })
 }
 
