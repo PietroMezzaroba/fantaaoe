@@ -1,0 +1,17 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+.vscode/
+
+# Node / Vue
+node_modules/
+dist/
+
+# segreti: mai nel repo (vanno in variabili d'ambiente sul server)
+.env
+.env.*
+appsettings.Development.json
+appsettings.*.local.json
+*.pfx

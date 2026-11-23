@@ -1,0 +1,41 @@
+name: Rilascio
+
+# A ogni push su main: compila l'immagine linux/arm64 e la pubblica su GHCR.
+# Il server la scarica da solo entro qualche minuto.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: rilascio
+  cancel-in-progress: true
+
+jobs:
+  immagine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ghcr.io/pietromezzaroba/fantaaoe:latest
+            ghcr.io/pietromezzaroba/fantaaoe:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
