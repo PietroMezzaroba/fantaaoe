@@ -72,7 +72,7 @@ const descrizioneBarre = computed(() => {
           <a :href="HANDBOOK" class="btn btn--linea btn--grande" target="_blank" rel="noopener">Il regolamento</a>
         </div>
         <p class="apertura__quando">
-          Sesta edizione: <span class="fill" data-fill="data della sesta edizione">date da annunciare</span>
+          Sesta edizione: da metà dicembre 2026, date precise in arrivo
         </p>
       </div>
       <div class="apertura__scena">
