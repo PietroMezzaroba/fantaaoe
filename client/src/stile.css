@@ -321,7 +321,7 @@ a.btn { text-decoration: none; }
 .numero:nth-child(even) { padding-left: var(--space-lg); border-left: var(--rule-hair) solid var(--color-rule); }
 .numero.angoli { padding-left: var(--space-md); }
 .numero dt { color: var(--color-muted); font-size: var(--text-sm); }
-.numero dd { margin: 0; font-size: clamp(2.6rem, 5vw, 4rem); font-weight: 200; line-height: 1; letter-spacing: -0.03em; }
+.numero dd { margin: 0; font-size: clamp(2.6rem, 5vw, 4rem); font-weight: 200; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .numero small { color: var(--color-ink-2); font-size: var(--text-sm); }
 .settimane { margin: var(--space-lg) 0 0; display: grid; gap: var(--space-xs); }
 .settimane svg { height: 72px; }
@@ -412,3 +412,5 @@ a.btn { text-decoration: none; }
   .misura dd { font-size: var(--text-2xl); }
   .casa__intro h1 { font-size: var(--text-2xl); }
 }
+
+.barra__accedi .btn { gap: 0.3em; }

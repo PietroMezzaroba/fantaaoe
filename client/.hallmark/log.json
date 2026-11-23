@@ -1,5 +1,31 @@
 [
  {
+  "shape": "Split Studio",
+  "theme": "vantage",
+  "scope": "page",
+  "mode": "build",
+  "axes": "dark/grotesk-sans/chromatic-green",
+  "hero": "Banner",
+  "nav": "top bar (kept, shared shell)",
+  "footer": "shared",
+  "imagery": "canvas point cloud of the community logo",
+  "photos": [],
+  "signature": "asta di prova giocabile con le regole vere del Fanta Age (401 Berlu, chiamata a serpente) e giocatori veri",
+  "sections": [
+   "apertura",
+   "numeri della community",
+   "asta di prova",
+   "dieci giocatori tre fasce",
+   "edizione 2025 e albo d oro",
+   "la prima volta"
+  ],
+  "waived": [],
+  "prompt": "landing del torneo FantaAge con statistiche vere",
+  "entry": "draw f794b1",
+  "fingerprint": "split-studio/banner/asta",
+  "date": "2026-11-23"
+ },
+ {
   "shape": "landing + app screens",
   "theme": "vantage",
   "scope": "page",
