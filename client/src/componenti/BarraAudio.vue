@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { audioAttivo, volumeAudio, suonoIngresso, audioPronto } from '../suoni.js'
+import { audioAttivo, volumeAudio, suonoIngresso, tentaSbloccoAudio } from '../suoni.js'
 
 const tracce = [
   { id: 'jrrr7w4wz18', nome: 'Age of Kings (1999)', inizio: 20 },
@@ -12,7 +12,6 @@ const aperto = ref(false)
 const ytPronto = ref(false)
 const partito = ref(false)
 let player = null
-let avvioTimer = null
 
 function caricaApiYouTube() {
   return new Promise((resolve) => {
@@ -31,7 +30,7 @@ function caricaApiYouTube() {
   })
 }
 
-async function assicuraPlayer() {
+async function assicuraPlayer(autoAvvia = false) {
   if (player && ytPronto.value) return player
   await caricaApiYouTube()
   return new Promise((resolve) => {
@@ -41,7 +40,7 @@ async function assicuraPlayer() {
       width: '1',
       videoId: tracce[indice.value].id,
       playerVars: {
-        autoplay: 0,
+        autoplay: autoAvvia ? 1 : 0,
         controls: 0,
         loop: 1,
         start: tracce[indice.value].inizio,
@@ -52,6 +51,9 @@ async function assicuraPlayer() {
         onReady: () => {
           ytPronto.value = true
           player.setVolume(volumeAudio.value)
+          if (audioAttivo.value && autoAvvia) {
+            try { player.playVideo() } catch {}
+          }
           resolve(player)
         },
         onStateChange: (e) => {
@@ -62,30 +64,27 @@ async function assicuraPlayer() {
   })
 }
 
-async function avviaSequenza() {
+async function avviaSubito() {
   if (!audioAttivo.value || partito.value) return
   partito.value = true
   rimuoviListenerSblocco()
+  // Parte a 0 ms il suono del fuoco + accordo, mentre YouTube parte subito appena pronto
   suonoIngresso()
-
-  const p = await assicuraPlayer()
-  clearTimeout(avvioTimer)
-  avvioTimer = setTimeout(() => {
-    if (!audioAttivo.value) return
-    try {
-      const start = tracce[indice.value].inizio || 0
-      if (start > 0 && typeof p.getCurrentTime === 'function' && p.getCurrentTime() < start) {
-        p.seekTo(start, true)
-      }
-      p.setVolume(volumeAudio.value)
-      p.playVideo()
-    } catch {}
-  }, 1150)
+  const p = await assicuraPlayer(true)
+  if (!audioAttivo.value) return
+  try {
+    const start = tracce[indice.value].inizio || 0
+    if (start > 0 && typeof p.getCurrentTime === 'function' && p.getCurrentTime() < start) {
+      p.seekTo(start, true)
+    }
+    p.setVolume(volumeAudio.value)
+    p.playVideo()
+  } catch {}
 }
 
 function alPrimoGesto() {
   if (!audioAttivo.value || partito.value) return
-  avviaSequenza()
+  avviaSubito()
 }
 
 function aggiungiListenerSblocco() {
@@ -101,7 +100,6 @@ function rimuoviListenerSblocco() {
 }
 
 async function toggleAudio() {
-  clearTimeout(avvioTimer)
   if (audioAttivo.value && partito.value) {
     audioAttivo.value = false
     partito.value = false
@@ -114,13 +112,13 @@ async function toggleAudio() {
   audioAttivo.value = true
   localStorage.removeItem('fantaage_muto')
   partito.value = false
-  await avviaSequenza()
+  await avviaSubito()
 }
 
 async function cambiaTraccia() {
   indice.value = (indice.value + 1) % tracce.length
   if (!audioAttivo.value) return
-  const p = await assicuraPlayer()
+  const p = await assicuraPlayer(true)
   try {
     p.loadVideoById({ videoId: tracce[indice.value].id, startSeconds: tracce[indice.value].inizio || 0 })
     p.setVolume(volumeAudio.value)
@@ -134,21 +132,19 @@ function cambiaVolume(e) {
   try { player?.setVolume(v) } catch {}
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (!audioAttivo.value) return
-  // Pre-carica YouTube subito così appena scatta il fuoco la OST è già pronta
-  assicuraPlayer()
-  // Prova ad avviare subito (funziona se il browser consente autoplay sul dominio)
-  if (audioPronto()) {
-    avviaSequenza()
+  // Avvia subito in parallelo sia il player YouTube sia lo sblocco Web Audio
+  assicuraPlayer(true)
+  const sbloccato = await tentaSbloccoAudio()
+  if (sbloccato) {
+    avviaSubito()
   } else {
-    // Altrimenti sblocca automaticamente al primissimo clic/tap ovunque nella pagina
     aggiungiListenerSblocco()
   }
 })
 
 onUnmounted(() => {
-  clearTimeout(avvioTimer)
   rimuoviListenerSblocco()
   try { player?.destroy() } catch {}
 })

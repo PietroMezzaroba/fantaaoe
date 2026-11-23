@@ -21,9 +21,13 @@ function ottieniCtx() {
   return ctx
 }
 
-export function audioPronto() {
+export async function tentaSbloccoAudio() {
   const c = ottieniCtx()
-  return !!c && c.state === 'running'
+  if (!c) return false
+  if (c.state === 'suspended') {
+    try { await c.resume() } catch {}
+  }
+  return c.state === 'running'
 }
 
 function scalaGain() {
