@@ -10,7 +10,7 @@ const r = computed(() => trovaRuolo(props.ruolo))
 const entra = computed(() => sessione.autenticato && puoEntrare(props.ruolo))
 
 watchEffect(() => {
-  if (r.value) document.title = `${r.value.nome}, FantaAoE`
+  if (r.value) document.title = `${r.value.nome}, FantaAge`
 })
 </script>
 

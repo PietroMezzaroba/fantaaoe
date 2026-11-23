@@ -80,6 +80,25 @@ public sealed class CivStat
     public long Vittorie { get; set; }
 }
 
+public sealed class Statistiche
+{
+    public long GiocatoriTotali { get; set; }
+    public long Attivi90 { get; set; }
+    public long Attivi30 { get; set; }
+    public long PartiteValide { get; set; }
+    public long Partite30 { get; set; }
+    public long Partite7 { get; set; }
+    public long MinutiTotali { get; set; }
+    public int? UltimoDito { get; set; }
+    public DateTime? PrimaPartita { get; set; }
+}
+
+public sealed class Settimana
+{
+    public DateTime Inizio { get; set; }
+    public long Partite { get; set; }
+}
+
 public sealed class Partita
 {
     public long IdGame { get; set; }

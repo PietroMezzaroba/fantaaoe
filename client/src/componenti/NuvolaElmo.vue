@@ -4,6 +4,9 @@
 // Si ferma fuori schermo, con la scheda nascosta, col bottone di pausa e con "riduci movimento".
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 
+// centroX: dove sta l'elmo in larghezza (0..1); quota: quanta larghezza può occupare
+const props = defineProps({ centroX: { type: Number, default: 0.5 }, quota: { type: Number, default: 1 } })
+
 const tela = ref(null)
 const contenitore = ref(null)
 const inPausa = ref(false)
@@ -50,9 +53,9 @@ function disegna(ora) {
   const cy = Math.cos(vista.x), sy = Math.sin(vista.x)
   const cx = Math.cos(vista.y), sx = Math.sin(vista.y)
 
-  const scala = Math.min(larghezza / 1550, altezza / 1300)
+  const scala = Math.min((larghezza * props.quota) / 1550, altezza / 1300)
   const f = 1100
-  const ox = larghezza * 0.5, oy = altezza * 0.5
+  const ox = larghezza * props.centroX, oy = altezza * 0.5
 
   // ingresso: i punti si raccolgono in 0,8 s
   const arrivo = ridotto ? 1 : Math.min(1, t / 0.8)

@@ -15,7 +15,7 @@ async function carica() {
   errore.value = ''
   try {
     d.value = await api(`giocatori/${props.id}`)
-    document.title = `${d.value.giocatore.nick}, FantaAoE`
+    document.title = `${d.value.giocatore.nick}, FantaAge`
   } catch (e) {
     errore.value = e.message
   } finally {

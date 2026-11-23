@@ -14,7 +14,7 @@ async function carica() {
   errore.value = ''
   try {
     d.value = await api(`partite/${props.id}`)
-    document.title = `${d.value.partita.dito ? `Dito ${d.value.partita.dito}` : 'Partita'}, FantaAoE`
+    document.title = `${d.value.partita.dito ? `Dito ${d.value.partita.dito}` : 'Partita'}, FantaAge`
   } catch (e) {
     errore.value = e.message
   } finally {

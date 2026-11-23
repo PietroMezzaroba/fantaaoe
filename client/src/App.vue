@@ -20,10 +20,10 @@ onMounted(async () => {
 <template>
   <header class="barra">
     <div class="container barra__dentro">
-      <RouterLink to="/" class="marchio" aria-label="FantaAoE, pagina iniziale">
+      <RouterLink to="/" class="marchio" aria-label="FantaAge, pagina iniziale">
         <img class="marchio__elmo" src="/logo-elmo.png" alt="" width="40" height="40" />
         <span class="marchio__testo">
-          <span class="marchio__nome">FantaAoE</span>
+          <span class="marchio__nome">FantaAge</span>
           <span class="marchio__sotto">Age of Empires Italia</span>
         </span>
       </RouterLink>
@@ -42,7 +42,7 @@ onMounted(async () => {
           <a class="btn btn--linea" href="/api/auth/esci">Esci</a>
         </div>
         <a v-else-if="sessione.loginAttivo" class="btn btn--linea" :href="linkAccesso(route.fullPath)">
-          Accedi<span class="accedi-lungo">&nbsp;con Discord</span>
+          Accedi<span class="accedi-lungo">con Discord</span>
         </a>
         <button
           v-else
@@ -51,7 +51,7 @@ onMounted(async () => {
           aria-disabled="true"
           title="Il login con Discord non è ancora attivo"
         >
-          Accedi<span class="accedi-lungo">&nbsp;con Discord</span>
+          Accedi<span class="accedi-lungo">con Discord</span>
         </button>
       </div>
     </div>
