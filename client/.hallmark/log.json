@@ -1,5 +1,27 @@
 [
  {
+  "shape": "landing + app screens",
+  "theme": "vantage",
+  "scope": "page",
+  "mode": "build",
+  "axes": "dark/grotesk-sans/chromatic-green",
+  "hero": "Stage",
+  "nav": "top bar",
+  "footer": "two-line meta",
+  "imagery": "canvas point cloud of the community logo",
+  "photos": [],
+  "signature": "l elmo di AoE Italia come nuvola di punti 3D che segue il puntatore, con scansione e pennacchio tricolore",
+  "sections": [
+   "hero con elmo e numeri vivi",
+   "tabellone di oggi",
+   "ultimo Dito",
+   "un pannello per ruolo"
+  ],
+  "waived": [],
+  "prompt": "landing dinamica del fantaAoE che reagisce al mouse",
+  "date": "2026-11-23"
+ },
+ {
   "shape": "app screen",
   "theme": "vantage",
   "scope": "app",

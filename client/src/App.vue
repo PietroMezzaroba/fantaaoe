@@ -20,7 +20,7 @@ onMounted(async () => {
 <template>
   <header class="barra">
     <div class="container barra__dentro">
-      <RouterLink to="/" class="marchio" aria-label="FantaAoE, torna ai pannelli">
+      <RouterLink to="/" class="marchio" aria-label="FantaAoE, pagina iniziale">
         <img class="marchio__elmo" src="/logo-elmo.png" alt="" width="40" height="40" />
         <span class="marchio__testo">
           <span class="marchio__nome">FantaAoE</span>
@@ -28,7 +28,7 @@ onMounted(async () => {
         </span>
       </RouterLink>
       <nav class="menu" aria-label="Sezioni">
-        <RouterLink to="/" exact-active-class="router-link-active" active-class="">Pannelli</RouterLink>
+        <RouterLink to="/pannelli">Pannelli</RouterLink>
         <RouterLink to="/classifica">Classifica</RouterLink>
         <RouterLink to="/partite">Partite</RouterLink>
         <RouterLink to="/civilta">Civiltà</RouterLink>
@@ -57,8 +57,8 @@ onMounted(async () => {
     </div>
   </header>
 
-  <main class="container pagina">
-    <p v-if="route.query.accesso === 'annullato'" class="avviso-riga" role="status">
+  <main :class="route.meta.pieno ? 'pieno' : 'container pagina'">
+    <p v-if="route.query.accesso === 'annullato'" class="avviso-riga" :class="{ container: route.meta.pieno }" role="status">
       Accesso con Discord annullato. Puoi riprovare quando vuoi.
     </p>
     <RouterView />

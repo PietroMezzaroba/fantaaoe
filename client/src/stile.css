@@ -1,5 +1,5 @@
 /* Hallmark · shape: app screen · genre: modern-minimal · theme: Vantage (deal 2/3, seed web-app-della-community-d63a·d24fb3bd·2026-11-23·r0) · redesign: full
- * nav: top bar, wordmark and five destinations, sign-in on the right · signature: il tabellone, the live ranking beside the panel doors · states: loading, empty, error, full · vantage: terrain/steel
+ * nav: top bar, wordmark and five destinations, sign-in on the right · signature: l'elmo di AoE Italia come nuvola di punti che segue il puntatore (landing); il tabellone dal vivo (pannelli) · hero: Stage (/) · states: loading, empty, error, full · vantage: terrain/steel
  * axes: dark/grotesk-sans/chromatic-green · posture: restrained · contrast: pass · brand: AoE Italia logo (navy paper, tricolour green signal, red for losses) · v2.0.0 */
 /* Hallmark · pre-emit critique: P4 H4 E4 S4 R5 V4 · weakest: P, the role doors have no working sign-in yet; each door says plainly what it will hold and that Discord sign-in comes next, instead of faking a login */
 @import url("./tokens.css");
@@ -252,9 +252,77 @@ tr.vivo td.pos { color: var(--color-accent); }
 .piede { border-top: var(--rule-hair) solid var(--color-rule); padding-block: var(--space-lg); color: var(--color-muted); font-size: var(--text-sm); }
 .piede .container { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-sm); }
 
+/* ---------- landing ---------- */
+.pieno { display: block; }
+.btn--grande { min-height: 48px; padding: 0 var(--space-lg); font-size: var(--text-md); }
+.eroe { border-bottom: var(--rule-hair) solid var(--color-rule); overflow-x: clip; }
+.eroe__griglia {
+  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--space-xl);
+  min-height: calc(100dvh - var(--bar-h)); max-height: 980px; align-items: center;
+}
+.eroe__testo { display: grid; gap: var(--space-lg); align-content: center; padding-block: var(--space-2xl); }
+.eroe__testo h1 { font-size: clamp(2.6rem, 5.2vw, 4.6rem); font-weight: 300; max-width: 11ch; }
+.eroe__testo .lead { font-size: var(--text-lg); color: var(--color-ink-2); max-width: 32ch; }
+.eroe__azioni { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.eroe__misure { display: grid; grid-template-columns: repeat(2, minmax(0, auto)); justify-content: start; margin: var(--space-md) 0 0; border-top: var(--rule-hair) solid var(--color-rule); }
+.eroe__misure > div { display: grid; gap: var(--space-2xs); padding: var(--space-md) var(--space-xl) 0 0; }
+.eroe__misure > div + div { padding-left: var(--space-xl); border-left: var(--rule-hair) solid var(--color-rule); }
+.eroe__misure dt { color: var(--color-muted); font-size: var(--text-sm); }
+.eroe__misure dd { margin: 0; font-size: var(--text-2xl); font-weight: 200; }
+.eroe__scena { position: relative; height: min(78dvh, 760px); margin-right: calc(var(--gutter) * -1); }
+
+.nuvola { position: absolute; inset: 0; touch-action: pan-y; }
+.nuvola canvas { width: 100%; height: 100%; display: block; opacity: 0; transition: opacity var(--dur-long) var(--ease-out); }
+.nuvola--pronta canvas { opacity: 1; }
+.nuvola__pausa {
+  position: absolute; right: var(--gutter); bottom: var(--space-md); min-height: 32px; padding: 0 var(--space-sm);
+  border: 0; border-radius: var(--radius-pill); background: var(--color-paper-2); color: var(--color-ink-2);
+  box-shadow: inset 0 0 0 var(--rule-hair) var(--color-rule-2); font-size: var(--text-sm); font-weight: 400; cursor: pointer;
+  transition: color var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-out);
+}
+.nuvola__pausa::before { content: ""; position: absolute; inset: -6px; }
+.nuvola__pausa:hover { color: var(--color-ink); background: var(--color-paper-3); }
+.nuvola__pausa:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .eroe__testo > * { animation: arrivo 0.6s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 60ms); }
+  .eroe__testo > :nth-child(2) { --i: 1; }
+  .eroe__testo > :nth-child(3) { --i: 2; }
+  .eroe__testo > :nth-child(4) { --i: 3; }
+  @keyframes arrivo { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+}
+
+.fasce { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-2xl) var(--space-3xl); padding-block: var(--space-3xl); }
+.fascia__testa { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-md); margin-bottom: var(--space-md); }
+.fascia__testa h2 { margin: 0; font-size: var(--text-xl); font-weight: 300; min-width: 0; }
+.fascia__testa a { white-space: nowrap; flex-shrink: 0; }
+.fascia:last-child { grid-column: 1 / -1; }
+
+.podio { list-style: none; margin: 0; padding: 0; border-top: var(--rule-hair) solid var(--color-rule); }
+.podio__riga {
+  display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; grid-template-rows: auto auto;
+  gap: 0 var(--space-md); padding: var(--space-sm) 0; border-bottom: var(--rule-hair) solid var(--color-rule); align-items: baseline;
+}
+.podio__pos { color: var(--color-muted); grid-row: 1 / span 2; }
+.podio__nome { font-size: var(--text-lg); font-weight: 400; text-decoration: none; }
+.podio__nome:hover { text-decoration: underline; text-decoration-color: var(--color-accent); }
+.podio__elo { font-size: var(--text-xl); font-weight: 200; grid-row: 1 / span 2; grid-column: 3; align-self: center; }
+.podio__altri { font-size: var(--text-sm); grid-column: 2; }
+.podio__riga:first-child .podio__elo { color: var(--color-accent); }
+
+.duello { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-lg); margin-top: var(--space-md); border-top: var(--rule-hair) solid var(--color-rule); padding-top: var(--space-md); }
+.duello__lato { display: grid; gap: var(--space-xs); align-content: start; }
+.duello ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2xs); }
+.duello li { display: flex; justify-content: space-between; gap: var(--space-sm); }
+.duello li .muto { font-size: var(--text-sm); }
+
 /* ---------- schermi stretti ---------- */
 @media (max-width: 60rem) {
-  .casa, .ruolo, .due { grid-template-columns: minmax(0, 1fr); gap: var(--space-xl); }
+  .casa, .ruolo, .due, .fasce { grid-template-columns: minmax(0, 1fr); gap: var(--space-xl); }
+  .eroe__griglia { grid-template-columns: minmax(0, 1fr); min-height: 0; max-height: none; gap: 0; }
+  .eroe__testo { padding-block: var(--space-xl) 0; }
+  .eroe__scena { height: 62vw; min-height: 300px; margin-inline: calc(var(--gutter) * -1); }
+  .fasce { padding-block: var(--space-2xl); }
   .misure { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .misura:nth-child(3) { padding-left: 0; border-left: 0; }
   .misura:nth-child(n + 3) { border-top: var(--rule-hair) solid var(--color-rule); }
@@ -266,6 +334,8 @@ tr.vivo td.pos { color: var(--color-accent); }
   th, td { padding-inline: var(--space-xs); }
   .nascondi-stretto { display: none; }
   .partita-riga a { grid-template-columns: minmax(0, 1fr); }
+  .duello { grid-template-columns: minmax(0, 1fr); }
+  .fascia__testa { flex-wrap: wrap; }
   .tabellone { padding: var(--space-md) var(--space-sm); }
   .tabellone th, .tabellone td { padding-inline: var(--space-2xs); }
   .tabellone td.pos { padding-right: var(--space-xs); }

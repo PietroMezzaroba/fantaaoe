@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import './stile.css'
 
+import Landing from './pagine/Landing.vue'
 import Casa from './pagine/Casa.vue'
 import Pannello from './pagine/Pannello.vue'
 import Classifica from './pagine/Classifica.vue'
@@ -14,7 +15,8 @@ import Civilta from './pagine/Civilta.vue'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', component: Casa, meta: { titolo: 'FantaAoE, Age of Empires Italia' } },
+    { path: '/', component: Landing, meta: { titolo: 'FantaAoE, Age of Empires Italia', pieno: true } },
+    { path: '/pannelli', component: Casa, meta: { titolo: 'Pannelli, FantaAoE' } },
     { path: '/pannello/:ruolo', component: Pannello, props: true },
     { path: '/classifica', component: Classifica, meta: { titolo: 'Classifica, FantaAoE' } },
     { path: '/giocatore/:id', component: Giocatore, props: true },

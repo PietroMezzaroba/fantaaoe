@@ -17,11 +17,11 @@ watchEffect(() => {
 <template>
   <div v-if="!r" class="avviso">
     <strong>Questo pannello non esiste.</strong>
-    <RouterLink to="/" class="btn btn--linea">Torna ai pannelli</RouterLink>
+    <RouterLink to="/pannelli" class="btn btn--linea">Torna ai pannelli</RouterLink>
   </div>
   <template v-else>
     <nav class="briciole" aria-label="Percorso">
-      <RouterLink to="/">Pannelli</RouterLink>
+      <RouterLink to="/pannelli">Pannelli</RouterLink>
       <span aria-hidden="true">/</span>
       <span aria-current="page">{{ r.nome }}</span>
     </nav>
