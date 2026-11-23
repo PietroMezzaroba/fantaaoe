@@ -737,3 +737,12 @@ html.cursore-moderno textarea {
 }
 .unita-arena--colpo .unita-scintilla { opacity: 1; transform: scale(1.7); }
 .unita-cap { text-align: center; }
+
+/* ---------- paladino che sfonda l'elmo in apertura ---------- */
+.nuvola canvas { position: relative; z-index: 2; }
+.nuvola__pausa { z-index: 4; }
+.nuvola__paladino {
+  position: absolute; top: 0; left: 0; opacity: 0; pointer-events: none;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.55));
+}

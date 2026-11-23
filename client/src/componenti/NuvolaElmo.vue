@@ -5,12 +5,14 @@
 // Una scansione lo attraversa ogni sette secondi.
 // Si ferma fuori schermo, con la scheda nascosta, col bottone di pausa e con "riduci movimento".
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { suonoRilancio } from '../suoni.js'
 
 // centroX: dove sta l'elmo in larghezza (0..1); quota: quanta larghezza può occupare
 const props = defineProps({ centroX: { type: Number, default: 0.5 }, quota: { type: Number, default: 1 } })
 
 const tela = ref(null)
 const contenitore = ref(null)
+const paladinoEl = ref(null)
 const inPausa = ref(false)
 const pronto = ref(false)
 
@@ -23,6 +25,17 @@ const INGRESSO = 2.4
 const mira = { x: 0, y: 0 }, vista = { x: 0, y: 0 }
 const puntatore = { x: -9999, y: -9999, attivo: false }
 let inizio = 0
+
+// Carica del Paladino di AoE2 DE che arriva da dietro, sfonda l'elmo e corre via
+const carica = { attiva: false, inizio: 0, durata: 2.35, prossimo: 2.8, suonato: false }
+
+function lanciaCarica(ora) {
+  if (ridotto || inPausa.value) return
+  carica.attiva = true
+  carica.inizio = ora
+  carica.suonato = false
+  carica.prossimo = (ora - inizio) / 1000 + 14
+}
 
 function leggiColori() {
   const s = getComputedStyle(document.documentElement)
@@ -83,9 +96,42 @@ function disegna(ora) {
   const piano = -820 + easeInOut(Math.min(1, ciclo / 0.7)) * 1640
   const scansioneAttiva = ridotto || ciclo < 0.7
 
+  // carica automatica del Paladino (prima volta subito dopo l'ingresso, poi ogni 14 s)
+  if (!fermo && !carica.attiva && t >= carica.prossimo) {
+    lanciaCarica(ora)
+  }
+
+  let cavAttivo = false, cavX = -9999, cavY = -9999
+  if (carica.attiva && !fermo) {
+    const pCar = (ora - carica.inizio) / 1000 / carica.durata
+    if (pCar >= 1) {
+      carica.attiva = false
+      if (paladinoEl.value) paladinoEl.value.style.opacity = '0'
+    } else {
+      cavAttivo = true
+      // Traiettoria diagonale 3/4 da destra-dietro (alto-destra) a sinistra-avanti (basso-sinistra)
+      cavX = larghezza + 110 - pCar * (larghezza + 260)
+      cavY = altezza * (0.42 + pCar * 0.24)
+      const scalaCav = 0.78 + pCar * 0.65 // parte più piccolo dietro l'elmo e cresce sfondando in avanti!
+      const davanti = pCar > 0.36
+      if (!carica.suonato && pCar > 0.4) {
+        carica.suonato = true
+        suonoRilancio()
+      }
+      if (paladinoEl.value) {
+        paladinoEl.value.style.opacity = pCar < 0.08 ? String(pCar / 0.08) : pCar > 0.9 ? String((1 - pCar) / 0.1) : '1'
+        paladinoEl.value.style.zIndex = davanti ? '3' : '0'
+        paladinoEl.value.style.transform = `translate3d(${cavX}px, ${cavY}px, 0) translate(-50%, -50%) scale(${scalaCav.toFixed(3)})`
+      }
+    }
+  } else if (paladinoEl.value) {
+    paladinoEl.value.style.opacity = '0'
+  }
+
   const secchi = { lo: [], mid: [], hi: [], verde: [], bianco: [], rosso: [], luce: [] }
   const p = dati
   const raggio = 110, raggio2 = raggio * raggio
+  const rCav = 165, rCav2 = rCav * rCav
 
   for (let i = 0; i < n; i++) {
     const k = i * 4
@@ -115,8 +161,19 @@ function disegna(ora) {
         spostY[i] += (dy / d) * forza * 0.18
       }
     }
-    spostX[i] *= 0.9
-    spostY[i] *= 0.9
+    // il Paladino che sfonda l'elmo sparpaglia con forza le particelle lungo la sua scia
+    if (cavAttivo && !ridotto) {
+      const dx = sxp - cavX, dy = syp - cavY
+      const d2 = dx * dx + dy * dy
+      if (d2 < rCav2 && d2 > 0.01) {
+        const d = Math.sqrt(d2)
+        const forza = (1 - d / rCav) * 95
+        spostX[i] += ((dx / d) * 0.85 - 0.55) * forza * 0.28
+        spostY[i] += ((dy / d) * 0.95 - 0.15) * forza * 0.28
+      }
+    }
+    spostX[i] *= 0.91
+    spostY[i] *= 0.91
     sxp += spostX[i]
     syp += spostY[i]
 
@@ -225,14 +282,24 @@ onBeforeUnmount(() => {
     :class="{ 'nuvola--pronta': pronto }"
     @pointermove="muovi"
     @pointerleave="esci"
+    @click="lanciaCarica(performance.now())"
   >
+    <img
+      ref="paladinoEl"
+      class="nuvola__paladino"
+      src="/sprite/paladino-galoppo.webp"
+      alt=""
+      aria-hidden="true"
+      width="98"
+      height="129"
+    />
     <canvas ref="tela" role="img" aria-label="L'elmo di Age of Empires Italia disegnato con migliaia di punti, che si inclina seguendo il puntatore" />
     <button
       v-if="pronto"
       type="button"
       class="nuvola__pausa keep-motion"
       :aria-pressed="inPausa"
-      @click="pausa"
+      @click.stop="pausa"
     >
       {{ inPausa ? 'Riprendi' : 'Ferma' }}
     </button>
