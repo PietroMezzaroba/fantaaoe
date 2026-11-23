@@ -2,16 +2,18 @@
 import { ref, onMounted } from 'vue'
 import { api } from '../api.js'
 import SchedaPartita from '../componenti/SchedaPartita.vue'
+import StatoDati from '../componenti/StatoDati.vue'
 
 const elenco = ref([])
 const pagina = ref(0)
 const totale = ref(0)
-const caricamento = ref(false)
+const primoCaricamento = ref(true)
+const altreInArrivo = ref(false)
 const errore = ref('')
 
 async function altre() {
-  caricamento.value = true
   errore.value = ''
+  altreInArrivo.value = pagina.value > 0
   try {
     const r = await api(`partite?pagina=${pagina.value + 1}&perPagina=30`)
     elenco.value.push(...r.partite)
@@ -20,23 +22,42 @@ async function altre() {
   } catch (e) {
     errore.value = e.message
   } finally {
-    caricamento.value = false
+    primoCaricamento.value = false
+    altreInArrivo.value = false
   }
 }
 onMounted(altre)
 </script>
 
 <template>
-  <h1>Partite</h1>
-  <p class="tenue piccolo">Storico dei TG Dito, dalla più recente. In verde chi ha vinto. Valide solo quelle oltre i 10 minuti di gioco.</p>
-
-  <div class="lista-partite">
-    <SchedaPartita v-for="x in elenco" :key="x.partita.idGame" :partita="x.partita" :giocatori="x.giocatori" />
+  <div class="testa-pagina">
+    <h1>Partite</h1>
+    <p>Lo storico dei TG Dito, dalla più recente. Per l'ELO contano quelle oltre i 10 minuti di gioco.</p>
   </div>
 
-  <div v-if="errore" class="stato errore">{{ errore }}</div>
-  <div v-else-if="caricamento" class="stato">Caricamento…</div>
-  <div v-else-if="elenco.length < totale" class="stato">
-    <button class="pulsante" @click="altre">Carica altre ({{ elenco.length }} di {{ totale }})</button>
-  </div>
+  <StatoDati
+    :caricamento="primoCaricamento"
+    :errore="elenco.length ? '' : errore"
+    :vuoto="!elenco.length"
+    :righe="8"
+    testo-vuoto="Non c'è ancora nessuna partita registrata."
+    @riprova="altre"
+  >
+    <ul class="partite">
+      <SchedaPartita v-for="x in elenco" :key="x.partita.idGame" :partita="x.partita" :giocatori="x.giocatori" />
+    </ul>
+    <div class="ancora">
+      <p v-if="errore" class="perso" role="alert">Le altre partite non sono arrivate ({{ errore }}).</p>
+      <button
+        v-if="elenco.length < totale"
+        type="button"
+        class="btn btn--linea"
+        :aria-busy="altreInArrivo"
+        :disabled="altreInArrivo"
+        @click="altre"
+      >
+        {{ altreInArrivo ? 'Arrivano…' : `Mostra altre 30 (${elenco.length} di ${totale})` }}
+      </button>
+    </div>
+  </StatoDati>
 </template>

@@ -1,14 +1,31 @@
 {
   "name": "FantaAoE",
   "short_name": "FantaAoE",
-  "description": "Classifica, partite e statistiche della community Age of Empires Italia",
+  "description": "Il fantaAoE della community Age of Empires Italia: classifica, partite, civiltà e pannelli per ruolo",
   "lang": "it",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#17140f",
-  "theme_color": "#17140f",
+  "background_color": "#17212d",
+  "theme_color": "#17212d",
   "icons": [
-    { "src": "/icona.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    {
+      "src": "/icona-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icona-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icona-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

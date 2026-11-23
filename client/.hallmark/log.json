@@ -1,0 +1,29 @@
+[
+ {
+  "shape": "app screen",
+  "theme": "vantage",
+  "scope": "app",
+  "mode": "redesign",
+  "depth": "full",
+  "axes": "dark/grotesk-sans/chromatic-green",
+  "nav": "top bar",
+  "footer": "two-line meta",
+  "imagery": "none, data only",
+  "photos": [],
+  "signature": "il tabellone, la classifica dal vivo accanto alle porte dei pannelli",
+  "sections": [
+   "porte dei pannelli",
+   "tabellone",
+   "classifica",
+   "giocatore",
+   "partite",
+   "partita",
+   "civilta",
+   "pannello per ruolo"
+  ],
+  "waived": [],
+  "prompt": "fantaAoE: pannelli per ruolo, classifica ELO, partite, civilta",
+  "brand": "logo AoE Italia: blu notte, verde e rosso del tricolore",
+  "date": "2026-11-23"
+ }
+]

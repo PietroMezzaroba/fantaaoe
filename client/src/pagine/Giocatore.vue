@@ -1,148 +1,152 @@
 <script setup>
 import { ref, watch } from 'vue'
-import { api, elo, percento, data, dataConOra, delta, fa } from '../api.js'
+import { api, elo, percento, giorno, ora, delta, fa } from '../api.js'
 import GraficoElo from '../componenti/GraficoElo.vue'
+import StatoDati from '../componenti/StatoDati.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
 
 const d = ref(null)
+const caricamento = ref(true)
 const errore = ref('')
 
-watch(
-  () => props.id,
-  async (id) => {
-    d.value = null
-    errore.value = ''
-    try {
-      d.value = await api(`giocatori/${id}`)
-      document.title = `${d.value.giocatore.nick} · FantaAoE`
-    } catch (e) {
-      errore.value = e.message
-    }
-  },
-  { immediate: true },
-)
+async function carica() {
+  caricamento.value = true
+  errore.value = ''
+  try {
+    d.value = await api(`giocatori/${props.id}`)
+    document.title = `${d.value.giocatore.nick}, FantaAoE`
+  } catch (e) {
+    errore.value = e.message
+  } finally {
+    caricamento.value = false
+  }
+}
+watch(() => props.id, carica, { immediate: true })
 
 const winrateCiv = (c) => (c.partite ? (c.vittorie / c.partite) * 100 : 0)
 const profilo = (id) => `https://www.aoe2insights.com/user/${id}/`
 </script>
 
 <template>
-  <div v-if="errore" class="stato errore">{{ errore }}</div>
-  <div v-else-if="!d" class="stato">Caricamento…</div>
-  <template v-else>
-    <p class="piccolo"><RouterLink to="/">← Classifica</RouterLink></p>
-    <h1>
-      {{ d.giocatore.nick }}
-      <span v-if="d.giocatore.clan" class="tenue">{{ d.giocatore.clan }}</span>
-    </h1>
+  <nav class="briciole" aria-label="Percorso">
+    <RouterLink to="/classifica">Classifica</RouterLink>
+    <span aria-hidden="true">/</span>
+    <span aria-current="page">{{ d?.giocatore.nick ?? 'Giocatore' }}</span>
+  </nav>
 
-    <div class="riquadri">
-      <div class="riquadro oro">
-        <div class="etichetta">ELO interno</div>
-        <div class="valore">{{ elo(d.giocatore.eloInterno) }}</div>
-        <div class="nota">TG Dito</div>
+  <StatoDati :caricamento="caricamento" :errore="errore" :righe="6" @riprova="carica">
+    <template v-if="d">
+      <div class="testa-pagina">
+        <h1>{{ d.giocatore.nick }}</h1>
+        <p v-if="d.giocatore.clan">Clan {{ d.giocatore.clan }}</p>
       </div>
-      <div class="riquadro">
-        <div class="etichetta">Ranked 1v1</div>
-        <div class="valore">{{ elo(d.giocatore.elo1v1) }}</div>
-        <div class="nota">max {{ elo(d.giocatore.elo1v1MassimoStorico) }} · {{ fa(d.giocatore.ultimaRanked1v1) }}</div>
-      </div>
-      <div class="riquadro">
-        <div class="etichetta">Ranked TG</div>
-        <div class="valore">{{ elo(d.giocatore.eloTg) }}</div>
-        <div class="nota">max {{ elo(d.giocatore.eloTgMassimoStorico) }} · {{ fa(d.giocatore.ultimaRankedTg) }}</div>
-      </div>
-      <div class="riquadro">
-        <div class="etichetta">Diti</div>
-        <div class="valore">{{ d.giocatore.nDiti }}</div>
-        <div class="nota">
-          {{ d.giocatore.nDitiVinti }} vinti · {{ d.giocatore.nDiti ? percento(d.giocatore.winrate) : '—' }}
+
+      <dl class="misure">
+        <div class="misura">
+          <dt>ELO interno</dt>
+          <dd class="segnale">{{ elo(d.giocatore.eloInterno) }}</dd>
+          <small>dai TG Dito</small>
         </div>
-      </div>
-    </div>
+        <div class="misura">
+          <dt>Ranked 1v1</dt>
+          <dd>{{ elo(d.giocatore.elo1v1) }}</dd>
+          <small>massimo {{ elo(d.giocatore.elo1v1MassimoStorico) }}, giocata {{ fa(d.giocatore.ultimaRanked1v1) }}</small>
+        </div>
+        <div class="misura">
+          <dt>Ranked TG</dt>
+          <dd>{{ elo(d.giocatore.eloTg) }}</dd>
+          <small>massimo {{ elo(d.giocatore.eloTgMassimoStorico) }}, giocata {{ fa(d.giocatore.ultimaRankedTg) }}</small>
+        </div>
+        <div class="misura">
+          <dt>Diti giocati</dt>
+          <dd>{{ d.giocatore.nDiti }}</dd>
+          <small>{{ d.giocatore.nDitiVinti }} vinti, {{ d.giocatore.nDiti ? percento(d.giocatore.winrate) : 'n.d.' }}</small>
+        </div>
+      </dl>
 
-    <template v-if="d.andamento.length > 1">
-      <h2>Andamento ELO interno</h2>
-      <GraficoElo :punti="d.andamento" />
+      <section v-if="d.andamento.length > 1" aria-labelledby="titolo-andamento">
+        <h2 id="titolo-andamento">Andamento dell'ELO interno</h2>
+        <GraficoElo :punti="d.andamento" />
+      </section>
+
+      <div class="due">
+        <section aria-labelledby="titolo-civ">
+          <h2 id="titolo-civ">Civiltà più giocate</h2>
+          <p v-if="!d.civ.length" class="muto">Nessuna partita valida con la civiltà registrata.</p>
+          <div v-else class="tabella">
+            <table>
+              <thead>
+                <tr><th scope="col">Civiltà</th><th scope="col" class="num">Partite</th><th scope="col">Vittorie</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="c in d.civ" :key="c.civ">
+                  <td>{{ c.civ }}</td>
+                  <td class="num">{{ c.partite }}</td>
+                  <td>
+                    <div class="barretta">
+                      <div class="barretta__traccia"><span :style="{ transform: `scaleX(${winrateCiv(c) / 100})` }" /></div>
+                      <span class="num">{{ percento(winrateCiv(c)) }}</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section aria-labelledby="titolo-account">
+          <h2 id="titolo-account">Account ranked</h2>
+          <div class="tabella">
+            <table>
+              <thead>
+                <tr><th scope="col">Account</th><th scope="col" class="num">1v1</th><th scope="col" class="num">TG</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="a in d.account" :key="a.aoe2Id">
+                  <td><a :href="profilo(a.aoe2Id)" target="_blank" rel="noopener">{{ a.steamName || a.aoe2Id }}</a></td>
+                  <td class="num">{{ elo(a.mmr1v1) }}</td>
+                  <td class="num">{{ elo(a.mmrTg) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <section class="sezione" aria-labelledby="titolo-partite">
+        <h2 id="titolo-partite">Ultime partite</h2>
+        <p v-if="!d.partite.length" class="muto">Nessun Dito registrato per questo giocatore.</p>
+        <div v-else class="tabella">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Quando</th>
+                <th scope="col">Esito</th>
+                <th scope="col">Civiltà</th>
+                <th scope="col" class="num">ELO dopo</th>
+                <th scope="col" class="num nascondi-stretto">Durata</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="p in d.partite" :key="p.idGame">
+                <td class="nome">
+                  <RouterLink :to="`/partita/${p.idGame}`">{{ p.dito ? `Dito ${p.dito}` : giorno(p.startedAt) }}</RouterLink>
+                  <span v-if="p.dito" class="clan">{{ giorno(p.startedAt) }}</span>
+                  <span v-else class="clan">{{ ora(p.startedAt) }}</span>
+                </td>
+                <td :class="p.vinto ? 'vinto' : 'perso'">{{ p.vinto ? 'Vinta' : 'Persa' }}</td>
+                <td class="tenue">{{ p.civ || 'n.d.' }}</td>
+                <td class="num">
+                  {{ elo(p.eloAfter) }}
+                  <span class="clan" :class="p.eloDelta > 0 ? 'vinto' : 'perso'">{{ delta(p.eloDelta) }}</span>
+                </td>
+                <td class="num muto nascondi-stretto">{{ p.durataInGameMinuti }}<span class="u">&thinsp;min</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </template>
-
-    <div class="due-colonne">
-      <section>
-        <h2>Civiltà più giocate</h2>
-        <div v-if="!d.civ.length" class="tenue">Nessuna partita valida</div>
-        <div v-else class="tabella-contenitore">
-          <table>
-            <thead>
-              <tr><th>Civiltà</th><th class="num">Partite</th><th>Vittorie</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="c in d.civ" :key="c.civ">
-                <td>{{ c.civ }}</td>
-                <td class="num">{{ c.partite }}</td>
-                <td>
-                  <div style="display: flex; align-items: center; gap: 8px">
-                    <div class="barra" style="flex: 1"><span :style="{ width: winrateCiv(c) + '%' }" /></div>
-                    <span class="num piccolo">{{ percento(winrateCiv(c)) }}</span>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section>
-        <h2>Account ranked</h2>
-        <div class="tabella-contenitore">
-          <table>
-            <thead>
-              <tr><th>Account</th><th class="num">1v1</th><th class="num">TG</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="a in d.account" :key="a.aoe2Id">
-                <td>
-                  <a :href="profilo(a.aoe2Id)" target="_blank" rel="noopener">{{ a.steamName || a.aoe2Id }}</a>
-                </td>
-                <td class="num">{{ elo(a.mmr1v1) }}</td>
-                <td class="num">{{ elo(a.mmrTg) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
-
-    <h2>Ultime partite</h2>
-    <div v-if="!d.partite.length" class="tenue">Nessuna partita</div>
-    <div v-else class="tabella-contenitore">
-      <table>
-        <thead>
-          <tr>
-            <th>Data</th>
-            <th>Esito</th>
-            <th>Civiltà</th>
-            <th class="num">ELO</th>
-            <th class="num nascondi-mobile">Durata</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="p in d.partite" :key="p.idGame">
-            <td>
-              <RouterLink :to="`/partita/${p.idGame}`">{{ dataConOra(p.startedAt) }}</RouterLink>
-              <span v-if="p.dito" class="etichetta-dito piccolo"> #{{ p.dito }}</span>
-            </td>
-            <td :class="p.vinto ? 'vinto' : 'perso'">{{ p.vinto ? 'Vinta' : 'Persa' }}</td>
-            <td>{{ p.civ || '—' }}</td>
-            <td class="num">
-              {{ elo(p.eloAfter) }}
-              <span class="piccolo" :class="p.eloDelta > 0 ? 'vinto' : 'perso'">{{ delta(p.eloDelta) }}</span>
-            </td>
-            <td class="num tenue nascondi-mobile">{{ p.durataInGameMinuti }} min</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="tenue piccolo">Ultimo Dito: {{ data(d.giocatore.ultimoDito) }}</p>
-  </template>
+  </StatoDati>
 </template>

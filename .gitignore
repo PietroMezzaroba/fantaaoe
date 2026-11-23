@@ -15,3 +15,7 @@ dist/
 appsettings.Development.json
 appsettings.*.local.json
 *.pfx
+
+# screenshot di Hallmark
+.hallmark/shots/
+.hallmark/before/

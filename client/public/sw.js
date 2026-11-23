@@ -1,9 +1,9 @@
 // Service worker minimo: rende il sito installabile e apre la shell anche offline.
 // Pagine e file: prima la rete, poi la copia salvata. API: sempre dalla rete.
-const CACHE = 'fantaaoe-v1'
+const CACHE = 'fantaaoe-v3'
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/icona.svg', '/manifest.webmanifest'])))
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/icona-192.png', '/logo-elmo.png', '/manifest.webmanifest'])))
   self.skipWaiting()
 })
 
