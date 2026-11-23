@@ -11,7 +11,13 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 
 // endpoint di prova
-app.MapGet("/api/salute", () => Results.Ok(new { stato = "ok", ora = DateTime.UtcNow }));
+// "versione" = commit pubblicato (lo passa GitHub Actions)
+app.MapGet("/api/salute", () => Results.Ok(new
+{
+    stato = "ok",
+    versione = Environment.GetEnvironmentVariable("VERSIONE") ?? "locale",
+    ora = DateTime.UtcNow,
+}));
 
 // tutte le altre rotte non /api vanno alla SPA
 app.MapFallbackToFile("index.html");

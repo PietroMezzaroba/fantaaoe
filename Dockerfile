@@ -19,6 +19,8 @@ RUN dotnet publish "$PROGETTO" -c Release -a "$TARGETARCH" --self-contained fals
 # 3) Immagine finale: solo il runtime, utente non root, porta 8080.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 LABEL org.opencontainers.image.source=https://github.com/PietroMezzaroba/fantaaoe
+ARG VERSIONE=locale
+ENV VERSIONE=$VERSIONE
 WORKDIR /app
 COPY --from=server /out ./
 # la build di Vue (dist/) finisce in wwwroot e sostituisce la pagina segnaposto
