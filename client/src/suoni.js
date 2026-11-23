@@ -170,3 +170,30 @@ export function suonoAggiudicato() {
     osc.stop(t0 + 0.95)
   })
 }
+
+let ultimoHover = 0
+// Micro-tick tattile elegante al passaggio del mouse su bottoni e link
+export function suonoHover() {
+  if (!audioAttivo.value) return
+  const t = performance.now()
+  if (t - ultimoHover < 55) return
+  ultimoHover = t
+  const c = ottieniCtx()
+  if (!c || c.state !== 'running') return
+  const now = c.currentTime
+  const vol = Math.max(0.06, scalaGain() * 0.28)
+
+  const osc = c.createOscillator()
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(520, now)
+  osc.frequency.exponentialRampToValueAtTime(780, now + 0.032)
+
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.0001, now)
+  g.gain.linearRampToValueAtTime(vol * 0.22, now + 0.006)
+  g.gain.exponentialRampToValueAtTime(0.0001, now + 0.04)
+
+  osc.connect(g).connect(c.destination)
+  osc.start(now)
+  osc.stop(now + 0.045)
+}

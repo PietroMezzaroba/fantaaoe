@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { api } from './api.js'
 import { sessione, caricaSessione, linkAccesso } from './sessione.js'
 import BarraAudio from './componenti/BarraAudio.vue'
+import EffettiUi from './componenti/EffettiUi.vue'
 
 const route = useRoute()
 const handbook = ref(null)
@@ -75,5 +76,6 @@ onMounted(async () => {
       <span>Community Age of Empires Italia</span>
     </div>
   </footer>
+  <EffettiUi />
   </template>
 </template>

@@ -72,7 +72,7 @@ async function avviaAlClick() {
   suonoIngresso()
 
   // 2) Subito dopo il suono di benvenuto parte la OST di Age of Kings da 0:20
-  //    con dissolvenza lenta (~4s) da bassissimo (1%) fino al volume impostato
+  //    con dissolvenza naturale (~2,5s) da 3% fino al volume impostato
   const p = await assicuraPlayer()
   clearTimeout(avvioTimer)
   clearInterval(fadeTimer)
@@ -81,9 +81,9 @@ async function avviaAlClick() {
     try {
       const start = tracce[indice.value].inizio || 0
       p.seekTo(start, true)
-      p.setVolume(1)
+      p.setVolume(3)
       p.playVideo()
-      const passi = 40 // 40 x 100ms = 4 secondi di dissolvenza morbida
+      const passi = 25 // 25 x 100ms = 2,5 secondi
       let passo = 0
       fadeTimer = setInterval(() => {
         passo++
@@ -94,12 +94,11 @@ async function avviaAlClick() {
           return
         }
         const t = passo / passi
-        const curva = t * t // parte bassissimo e cresce gradualmente
-        const v = Math.max(1, Math.round(volumeAudio.value * curva))
+        const v = Math.max(3, Math.round(3 + (volumeAudio.value - 3) * t))
         try { p.setVolume(v) } catch {}
       }, 100)
     } catch {}
-  }, 1300)
+  }, 1150)
 }
 
 function alPrimoGesto(e) {
