@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from './api.js'
 import { sessione, caricaSessione, linkAccesso } from './sessione.js'
+import BarraAudio from './componenti/BarraAudio.vue'
 
 const route = useRoute()
 const handbook = ref(null)
@@ -39,6 +40,7 @@ onMounted(async () => {
       </nav>
 
       <div class="barra__accedi">
+        <BarraAudio />
         <div v-if="sessione.autenticato" class="utente">
           <img v-if="sessione.avatar" class="utente__foto" :src="sessione.avatar" alt="" width="32" height="32" />
           <span class="utente__nome">{{ sessione.nome }}</span>
