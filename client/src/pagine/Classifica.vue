@@ -79,7 +79,7 @@ const righe = computed(() => {
           <td class="pos num">{{ i + 1 }}</td>
           <td>
             <RouterLink :to="`/giocatore/${g.playerId}`">{{ g.nick }}</RouterLink>
-            <span v-if="g.clan" class="tenue piccolo"> {{ g.clan }}</span>
+            <span v-if="g.clan" class="clan">{{ g.clan }}</span>
           </td>
           <td class="num">{{ elo(g.eloInterno) }}</td>
           <td class="num">{{ elo(g.elo1v1) }}</td>
