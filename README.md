@@ -12,10 +12,23 @@ Fai `git push` su `main`: GitHub Actions compila l'immagine per il server (Linux
 
 | Cartella | Cosa |
 |---|---|
-| `server/` | API ASP.NET Core **.NET 10** (`FantaAoe.Api.csproj`, scheletro di partenza da sostituire) |
+| `server/` | API ASP.NET Core **.NET 10** (minimal API + Dapper + Npgsql), sola lettura sullo schema `fanta` del DB della classifica |
+| `client/` | SPA Vue 3 + Vite (PWA installabile): al rilascio `npm ci && npm run build`, `dist/` va in `wwwroot` |
 | `server/wwwroot/` | pagina segnaposto, sostituita dalla build di Vue |
-| `client/` | SPA Vue: al rilascio `npm ci && npm run build`, `dist/` va in `wwwroot` |
 | `Dockerfile` | come si costruisce l'immagine (di solito non va toccato) |
+
+## API
+
+| Percorso | Cosa |
+|---|---|
+| `/api/salute` | stato, versione pubblicata, DB raggiungibile |
+| `/api/giocatori?tutti=false` | classifica: ELO interno, ranked 1v1 e TG (il più alto tra gli account), Diti, winrate |
+| `/api/giocatori/{id}` | dettaglio: account, ultime 30 partite, andamento ELO, civiltà |
+| `/api/partite?pagina=1&perPagina=30` | storico partite con i giocatori |
+| `/api/partite/{id}` | una partita |
+| `/api/civ?giorni=365` | partite e vittorie per civiltà |
+
+In locale: `cd client && npm install && npm run dev` usa le API del sito pubblicato.
 
 Se il progetto server cambia nome, aggiorna `PROGETTO` e l'`ENTRYPOINT` nel `Dockerfile`.
 

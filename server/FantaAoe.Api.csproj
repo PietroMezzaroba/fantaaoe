@@ -7,4 +7,9 @@
     <RootNamespace>FantaAoe.Api</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="10.*" />
+    <PackageReference Include="Dapper" Version="2.*" />
+  </ItemGroup>
+
 </Project>
