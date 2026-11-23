@@ -73,7 +73,7 @@ onMounted(async () => {
   <footer class="piede">
     <div class="container">
       <span>Dati della classifica interna dei TG Dito e delle ranked di Age of Empires II</span>
-      <span>Community Age of Empires Italia</span>
+      <span>Community Age of Empires Italia · Age of Empires II: DE © Microsoft Corp. (Game Content Usage Rules)</span>
     </div>
   </footer>
   <EffettiUi />

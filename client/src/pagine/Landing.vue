@@ -5,6 +5,7 @@ import { ruoli } from '../ruoli.js'
 import { sessione, linkAccesso } from '../sessione.js'
 import NuvolaElmo from '../componenti/NuvolaElmo.vue'
 import AstaProva from '../componenti/AstaProva.vue'
+import UnitaAoe from '../componenti/UnitaAoe.vue'
 
 // Fatti dall'handbook del Fanta Age 2025 (5ª edizione) e dai fogli 2024 e 2025.
 const HANDBOOK = 'https://docs.google.com/document/d/1l6GwnV2-LH0DC-zBCRcFXmZbd14KPQopuweMsNGHitM/edit?usp=sharing'
@@ -148,6 +149,7 @@ const descrizioneBarre = computed(() => {
         <h2 id="titolo-fasce">Dieci giocatori, tre fasce</h2>
         <p>Il seeding parte dall'ELO 1v1 più alto di ogni giocatore. Ogni fascia gioca i suoi 3vs3 al meglio delle tre partite, e i punti finiscono in un'unica classifica.</p>
         <RouterLink to="/classifica" class="btn btn--linea">Vedi gli ELO</RouterLink>
+        <UnitaAoe tipo="duello" didascalia="Milizie in campo · clicca per il colpo" />
       </div>
       <div class="riga__prova fasce-punti">
         <ul class="fasce">
@@ -177,6 +179,7 @@ const descrizioneBarre = computed(() => {
             <span class="muto">{{ nota }}</span>
           </li>
         </ul>
+        <UnitaAoe tipo="paladino" didascalia="Paladino · clicca per attaccare" />
       </div>
       <ol class="calendario riga__prova">
         <li v-for="[quando, cosa] in calendario2025" :key="cosa">
