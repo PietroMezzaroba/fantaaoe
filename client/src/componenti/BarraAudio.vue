@@ -132,16 +132,16 @@ function cambiaVolume(e) {
   try { player?.setVolume(v) } catch {}
 }
 
-onMounted(async () => {
+onMounted(() => {
   if (!audioAttivo.value) return
-  // Avvia subito in parallelo sia il player YouTube sia lo sblocco Web Audio
+  // 1) Registra SUBITO lo sblocco al primo gesto (senza await bloccanti!)
+  aggiungiListenerSblocco()
+  // 2) Pre-carica YouTube subito
   assicuraPlayer(true)
-  const sbloccato = await tentaSbloccoAudio()
-  if (sbloccato) {
-    avviaSubito()
-  } else {
-    aggiungiListenerSblocco()
-  }
+  // 3) Prova comunque lo sblocco immediato (se il browser consente autoplay, parte a 0 ms!)
+  tentaSbloccoAudio().then((sbloccato) => {
+    if (sbloccato && audioAttivo.value && !partito.value) avviaSubito()
+  })
 })
 
 onUnmounted(() => {
