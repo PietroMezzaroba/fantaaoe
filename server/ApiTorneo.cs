@@ -194,6 +194,34 @@ public static class ApiTorneo
             return Results.Ok(new { ok = true });
         });
 
+        // Il giocatore conferma il collegamento automatico proposto da Thomuggia
+        app.MapPost("/api/profilo/conferma", async (ClaimsPrincipal u) =>
+        {
+            if (db is null) return Results.Problem("Database non configurato", statusCode: 503);
+            if (!EAutenticato(u)) return Results.Unauthorized();
+            var did = DiscordId(u)!;
+            await using var c = await db.OpenConnectionAsync();
+            var pid = await c.ExecuteScalarAsync<int?>(
+                "select player_id from fanta_torneo.utenti_discord where discord_id = @did", new { did });
+            if (pid is null) return Results.BadRequest(new { errore = "Nessun profilo da confermare." });
+
+            await c.ExecuteAsync("""
+                update fanta_torneo.utenti_discord
+                set verificato = true,
+                    collegato_da = 'utente_confermato',
+                    aggiornato_il = now()
+                where discord_id = @did
+                """, new { did });
+
+            await c.ExecuteAsync("""
+                update fanta_torneo.iscritti
+                set discord_id = @did
+                where player_id = @pid and discord_id is null
+                """, new { did, pid = pid.Value });
+
+            return Results.Ok(new { ok = true });
+        });
+
         // Lista iscritti (pubblica o autenticata)
         app.MapGet("/api/torneo/iscritti", async () =>
         {

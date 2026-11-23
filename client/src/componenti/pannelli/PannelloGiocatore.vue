@@ -104,6 +104,20 @@ async function collegaGiocatore(playerId) {
   }
 }
 
+async function confermaProfilo() {
+  salvandoLegame.value = true
+  errore.value = null
+  try {
+    await apiPost('profilo/conferma', {})
+    profilo.value = await api('profilo')
+    avvisa('Profilo confermato! Ora sei verificato.')
+  } catch (e) {
+    errore.value = e.message
+  } finally {
+    salvandoLegame.value = false
+  }
+}
+
 async function impostaDisp(iso, stato) {
   salvandoData.value = iso
   errore.value = null
@@ -178,6 +192,25 @@ onMounted(caricaTutto)
 
     <!-- ==================== PROFILO ==================== -->
     <section v-else-if="scheda === 'profilo'" class="blocco-pannello">
+      <div
+        v-if="profilo?.giocatore && profilo?.legame && !profilo.legame.verificato"
+        class="riquadro angoli"
+        style="border-left: 3px solid var(--color-accent)"
+      >
+        <div class="riga-spazio">
+          <div>
+            <strong>Conferma il tuo profilo</strong>
+            <p class="piccolo muto" style="margin-top: 4px">
+              Abbiamo riconosciuto automaticamente il tuo account Discord come <strong>{{ profilo.giocatore.nick }}</strong>. Sei davvero tu?
+            </p>
+          </div>
+          <div class="azioni-inline">
+            <button type="button" class="btn" :disabled="salvandoLegame" @click="confermaProfilo">Sì, sono io</button>
+            <button type="button" class="btn btn--linea" :disabled="salvandoLegame" @click="collegaGiocatore(null)">No, scegli un altro</button>
+          </div>
+        </div>
+      </div>
+
       <div v-if="profilo?.giocatore" class="riquadro angoli">
         <div class="riga-spazio">
           <div>
