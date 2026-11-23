@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { audioAttivo, volumeAudio, suonoIngresso, tentaSbloccoAudio } from '../suoni.js'
+import { audioAttivo, volumeAudio, suonoIngresso } from '../suoni.js'
 
 const tracce = [
   { id: 'jrrr7w4wz18', nome: 'Age of Kings (1999)', inizio: 20 },
@@ -12,6 +12,7 @@ const aperto = ref(false)
 const ytPronto = ref(false)
 const partito = ref(false)
 let player = null
+let avvioTimer = null
 
 function caricaApiYouTube() {
   return new Promise((resolve) => {
@@ -30,7 +31,7 @@ function caricaApiYouTube() {
   })
 }
 
-async function assicuraPlayer(autoAvvia = false) {
+async function assicuraPlayer() {
   if (player && ytPronto.value) return player
   await caricaApiYouTube()
   return new Promise((resolve) => {
@@ -40,7 +41,7 @@ async function assicuraPlayer(autoAvvia = false) {
       width: '1',
       videoId: tracce[indice.value].id,
       playerVars: {
-        autoplay: autoAvvia ? 1 : 0,
+        autoplay: 0,
         controls: 0,
         loop: 1,
         start: tracce[indice.value].inizio,
@@ -51,9 +52,6 @@ async function assicuraPlayer(autoAvvia = false) {
         onReady: () => {
           ytPronto.value = true
           player.setVolume(volumeAudio.value)
-          if (audioAttivo.value && autoAvvia) {
-            try { player.playVideo() } catch {}
-          }
           resolve(player)
         },
         onStateChange: (e) => {
@@ -64,27 +62,33 @@ async function assicuraPlayer(autoAvvia = false) {
   })
 }
 
-async function avviaSubito() {
+async function avviaAlClick() {
   if (!audioAttivo.value || partito.value) return
   partito.value = true
   rimuoviListenerSblocco()
-  // Parte a 0 ms il suono del fuoco + accordo, mentre YouTube parte subito appena pronto
+
+  // 1) Suono iniziale (fuoco + accordo) sempre pulito dall'inizio al volume impostato (default 10%)
   suonoIngresso()
-  const p = await assicuraPlayer(true)
-  if (!audioAttivo.value) return
-  try {
-    const start = tracce[indice.value].inizio || 0
-    if (start > 0 && typeof p.getCurrentTime === 'function' && p.getCurrentTime() < start) {
+
+  // 2) Subito dopo il suono iniziale parte la OST di Age of Kings pulita da 0:20
+  const p = await assicuraPlayer()
+  clearTimeout(avvioTimer)
+  avvioTimer = setTimeout(() => {
+    if (!audioAttivo.value) return
+    try {
+      const start = tracce[indice.value].inizio || 0
       p.seekTo(start, true)
-    }
-    p.setVolume(volumeAudio.value)
-    p.playVideo()
-  } catch {}
+      p.setVolume(volumeAudio.value)
+      p.playVideo()
+    } catch {}
+  }, 1150)
 }
 
-function alPrimoGesto() {
+function alPrimoGesto(e) {
+  // Se l'utente clicca proprio il bottone Audio/OST, lascia gestire a toggleAudio()
+  if (e?.target?.closest?.('.audio-ctl')) return
   if (!audioAttivo.value || partito.value) return
-  avviaSubito()
+  avviaAlClick()
 }
 
 function aggiungiListenerSblocco() {
@@ -100,6 +104,7 @@ function rimuoviListenerSblocco() {
 }
 
 async function toggleAudio() {
+  clearTimeout(avvioTimer)
   if (audioAttivo.value && partito.value) {
     audioAttivo.value = false
     partito.value = false
@@ -112,13 +117,13 @@ async function toggleAudio() {
   audioAttivo.value = true
   localStorage.removeItem('fantaage_muto')
   partito.value = false
-  await avviaSubito()
+  await avviaAlClick()
 }
 
 async function cambiaTraccia() {
   indice.value = (indice.value + 1) % tracce.length
   if (!audioAttivo.value) return
-  const p = await assicuraPlayer(true)
+  const p = await assicuraPlayer()
   try {
     p.loadVideoById({ videoId: tracce[indice.value].id, startSeconds: tracce[indice.value].inizio || 0 })
     p.setVolume(volumeAudio.value)
@@ -128,23 +133,19 @@ async function cambiaTraccia() {
 function cambiaVolume(e) {
   const v = Number(e.target.value)
   volumeAudio.value = v
-  localStorage.setItem('fantaage_vol', String(v))
+  localStorage.setItem('fantaage_vol_v2', String(v))
   try { player?.setVolume(v) } catch {}
 }
 
 onMounted(() => {
   if (!audioAttivo.value) return
-  // 1) Registra SUBITO lo sblocco al primo gesto (senza await bloccanti!)
+  // Pre-carica YouTube fermo (autoplay: 0) e aspetta il primo click per far partire tutto pulito dall'inizio
+  assicuraPlayer()
   aggiungiListenerSblocco()
-  // 2) Pre-carica YouTube subito
-  assicuraPlayer(true)
-  // 3) Prova comunque lo sblocco immediato (se il browser consente autoplay, parte a 0 ms!)
-  tentaSbloccoAudio().then((sbloccato) => {
-    if (sbloccato && audioAttivo.value && !partito.value) avviaSubito()
-  })
 })
 
 onUnmounted(() => {
+  clearTimeout(avvioTimer)
   rimuoviListenerSblocco()
   try { player?.destroy() } catch {}
 })

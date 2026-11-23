@@ -7,7 +7,7 @@ import { ref } from 'vue'
 
 // Attivo di default a meno che l'utente non lo abbia spento esplicitamente
 export const audioAttivo = ref(localStorage.getItem('fantaage_muto') !== '1')
-export const volumeAudio = ref(Number(localStorage.getItem('fantaage_vol') ?? 35))
+export const volumeAudio = ref(Number(localStorage.getItem('fantaage_vol_v2') ?? 10))
 
 let ctx = null
 
@@ -31,7 +31,7 @@ export async function tentaSbloccoAudio() {
 }
 
 function scalaGain() {
-  return Math.max(0.05, Math.min(1, volumeAudio.value / 100))
+  return Math.max(0.02, Math.min(1, volumeAudio.value / 100))
 }
 
 // Effetto fuoco/fiamma + accordo medievale d'ingresso
