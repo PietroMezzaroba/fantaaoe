@@ -4,10 +4,23 @@ import { useRoute } from 'vue-router'
 import { trovaRuolo } from '../ruoli.js'
 import { sessione, puoEntrare, linkAccesso } from '../sessione.js'
 
+import PannelloGiocatore from '../componenti/pannelli/PannelloGiocatore.vue'
+import PannelloCapitano from '../componenti/pannelli/PannelloCapitano.vue'
+import PannelloAdmin from '../componenti/pannelli/PannelloAdmin.vue'
+import PannelloStreamer from '../componenti/pannelli/PannelloStreamer.vue'
+
 const props = defineProps({ ruolo: { type: String, required: true } })
 const route = useRoute()
 const r = computed(() => trovaRuolo(props.ruolo))
 const entra = computed(() => sessione.autenticato && puoEntrare(props.ruolo))
+
+const componenti = {
+  giocatore: PannelloGiocatore,
+  capitano: PannelloCapitano,
+  admin: PannelloAdmin,
+  streamer: PannelloStreamer,
+}
+const vistaAttiva = computed(() => componenti[props.ruolo] || null)
 
 watchEffect(() => {
   if (r.value) document.title = `${r.value.nome}, FantaAge`
@@ -26,13 +39,15 @@ watchEffect(() => {
       <span aria-current="page">{{ r.nome }}</span>
     </nav>
 
-    <div class="ruolo">
+    <component :is="vistaAttiva" v-if="entra && vistaAttiva" />
+
+    <div v-else class="ruolo">
       <section aria-labelledby="titolo-ruolo">
         <div class="testa-pagina">
           <h1 id="titolo-ruolo">{{ r.nome }}</h1>
           <p>{{ r.intro }}</p>
         </div>
-        <h2>{{ entra ? 'In costruzione' : 'Cosa troverai qui' }}</h2>
+        <h2>Cosa troverai qui</h2>
         <ul class="funzioni">
           <li v-for="[titolo, testo] in r.funzioni" :key="titolo">
             <strong>{{ titolo }}</strong>
@@ -45,27 +60,6 @@ watchEffect(() => {
         <template v-if="!sessione.caricata">
           <h2 id="titolo-accesso">Controllo l'accesso</h2>
           <p>Un attimo, leggo chi sei.</p>
-        </template>
-
-        <template v-else-if="entra">
-          <div class="dentro">
-            <span class="dentro__stato">Sei dentro</span>
-            <h2 id="titolo-accesso">Ciao {{ sessione.nome }}</h2>
-          </div>
-          <p>Il tuo account Discord ha accesso a questo pannello. Le funzioni qui accanto arrivano una alla volta.</p>
-          <RouterLink to="/classifica" class="btn btn--linea">Apri la classifica</RouterLink>
-
-          <div v-if="sessione.configurazione" class="config">
-            <strong>Per collegare i ruoli (visibile solo agli admin)</strong>
-            <dl>
-              <dt>Server</dt>
-              <dd>{{ sessione.configurazione.guildId || 'non trovato' }}</dd>
-              <dt>Il tuo ID</dt>
-              <dd>{{ sessione.configurazione.discordId }}</dd>
-              <dt>I tuoi ruoli</dt>
-              <dd>{{ sessione.configurazione.ruoliDiscord.join(', ') || 'nessuno' }}</dd>
-            </dl>
-          </div>
         </template>
 
         <template v-else-if="sessione.autenticato">

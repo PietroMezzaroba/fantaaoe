@@ -11,6 +11,7 @@ import Giocatore from './pagine/Giocatore.vue'
 import Partite from './pagine/Partite.vue'
 import Partita from './pagine/Partita.vue'
 import Civilta from './pagine/Civilta.vue'
+import OverlayAsta from './pagine/OverlayAsta.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -18,6 +19,7 @@ const router = createRouter({
     { path: '/', component: Landing, meta: { titolo: 'FantaAge, Age of Empires Italia', pieno: true } },
     { path: '/pannelli', component: Casa, meta: { titolo: 'Pannelli, FantaAge' } },
     { path: '/pannello/:ruolo', component: Pannello, props: true },
+    { path: '/overlay/asta', component: OverlayAsta, meta: { titolo: 'Overlay Asta, FantaAge', nudo: true } },
     { path: '/classifica', component: Classifica, meta: { titolo: 'Classifica, FantaAge' } },
     { path: '/giocatore/:id', component: Giocatore, props: true },
     { path: '/partite', component: Partite, meta: { titolo: 'Partite, FantaAge' } },

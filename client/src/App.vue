@@ -18,6 +18,8 @@ onMounted(async () => {
 </script>
 
 <template>
+  <RouterView v-if="route.meta.nudo" />
+  <template v-else>
   <header class="barra">
     <div class="container barra__dentro">
       <RouterLink to="/" class="marchio" aria-label="FantaAge, pagina iniziale">
@@ -70,4 +72,5 @@ onMounted(async () => {
       <span>Community Age of Empires Italia</span>
     </div>
   </footer>
+  </template>
 </template>

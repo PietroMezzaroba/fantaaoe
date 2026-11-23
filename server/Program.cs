@@ -61,6 +61,7 @@ if (accesso.Attivo)
     });
 }
 builder.Services.AddAuthorization();
+builder.Services.AddSingleton<AstaHub>();
 
 var app = builder.Build();
 
@@ -95,14 +96,16 @@ app.MapGet("/api/auth/esci", async (HttpContext ctx) =>
     return Results.Redirect("/");
 });
 
-app.MapGet("/api/io", (ClaimsPrincipal u) =>
+app.MapGet("/api/io", async (ClaimsPrincipal u) =>
 {
     var dentro = u.Identity?.IsAuthenticated == true;
     var admin = u.IsInRole(Accesso.Admin);
+    if (dentro) await ApiTorneo.RegistraUtenteDiscord(db, u);
     return Results.Ok(new
     {
         loginAttivo = accesso.Attivo,
         autenticato = dentro,
+        discordId = dentro ? u.FindFirst("discord_id")?.Value : null,
         nome = dentro ? u.FindFirst("nome")?.Value : null,
         avatar = dentro ? u.FindFirst("avatar")?.Value : null,
         membro = dentro && u.HasClaim(c => c.Type == "membro"),
@@ -301,6 +304,9 @@ api.MapGet("/civ", async (int? giorni) =>
         """, new { giorni });
     return Results.Ok(righe);
 });
+
+// ---------- API interattive del torneo (Blocchi A, B, C) ----------
+app.MappaApiTorneo(db, app.Services.GetRequiredService<AstaHub>());
 
 // tutte le altre rotte non /api vanno alla SPA
 app.MapFallbackToFile("index.html");

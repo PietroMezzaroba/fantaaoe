@@ -1,10 +1,34 @@
 // Chiamate alle API e piccole funzioni di formato condivise dalle pagine.
 
 export async function api(percorso) {
-  const r = await fetch(`/api/${percorso}`)
-  if (!r.ok) throw new Error(r.status === 404 ? 'non trovato' : `errore ${r.status}`)
+  const r = await fetch(`/api/${percorso}`, { credentials: 'same-origin' })
+  if (!r.ok) {
+    let msg = r.status === 404 ? 'non trovato' : `errore ${r.status}`
+    try { const j = await r.json(); if (j?.errore) msg = j.errore } catch {}
+    throw new Error(msg)
+  }
   return r.json()
 }
+
+export async function apiInvia(percorso, metodo, corpo) {
+  const r = await fetch(`/api/${percorso}`, {
+    method: metodo,
+    credentials: 'same-origin',
+    headers: corpo !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    body: corpo !== undefined ? JSON.stringify(corpo) : undefined,
+  })
+  if (!r.ok) {
+    let msg = `errore ${r.status}`
+    try { const j = await r.json(); if (j?.errore) msg = j.errore } catch {}
+    throw new Error(msg)
+  }
+  return r.json()
+}
+
+export const apiPost = (p, b) => apiInvia(p, 'POST', b)
+export const apiPut = (p, b) => apiInvia(p, 'PUT', b)
+export const apiPatch = (p, b) => apiInvia(p, 'PATCH', b)
+export const apiDelete = (p) => apiInvia(p, 'DELETE')
 
 const dataBreve = new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })
 const soloGiorno = new Intl.DateTimeFormat('it-IT', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })

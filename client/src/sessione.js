@@ -5,6 +5,7 @@ export const sessione = reactive({
   caricata: false,
   loginAttivo: false,
   autenticato: false,
+  discordId: null,
   nome: null,
   avatar: null,
   membro: false,
