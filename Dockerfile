@@ -15,6 +15,8 @@ ARG PROGETTO=FantaAoe.Api.csproj
 WORKDIR /src
 COPY server/ ./
 RUN dotnet publish "$PROGETTO" -c Release -a "$TARGETARCH" --self-contained false -o /out
+# cartella vuota per le chiavi dei cookie di sessione (diventa un volume sul server)
+RUN mkdir -p /vuota
 
 # 3) Immagine finale: solo il runtime, utente non root, porta 8080.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
@@ -25,6 +27,7 @@ WORKDIR /app
 COPY --from=server /out ./
 # la build di Vue (dist/) finisce in wwwroot e sostituisce la pagina segnaposto
 COPY --from=client /src/dist ./wwwroot/
+COPY --from=server --chown=1654:1654 /vuota /keys
 USER app
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "FantaAoe.Api.dll"]

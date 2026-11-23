@@ -1,9 +1,14 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { api } from './api.js'
+import { sessione, caricaSessione, linkAccesso } from './sessione.js'
 
+const route = useRoute()
 const handbook = ref(null)
+
 onMounted(async () => {
+  caricaSessione()
   try {
     handbook.value = (await api('info')).handbook
   } catch {
@@ -29,18 +34,33 @@ onMounted(async () => {
         <RouterLink to="/civilta">Civiltà</RouterLink>
         <a v-if="handbook" :href="handbook" target="_blank" rel="noopener">Handbook</a>
       </nav>
-      <button
-        type="button"
-        class="btn btn--linea barra__accedi"
-        aria-disabled="true"
-        title="Il login con Discord arriva nella prossima versione"
-      >
-        Accedi<span class="accedi-lungo">&nbsp;con Discord</span>
-      </button>
+
+      <div class="barra__accedi">
+        <div v-if="sessione.autenticato" class="utente">
+          <img v-if="sessione.avatar" class="utente__foto" :src="sessione.avatar" alt="" width="32" height="32" />
+          <span class="utente__nome">{{ sessione.nome }}</span>
+          <a class="btn btn--linea" href="/api/auth/esci">Esci</a>
+        </div>
+        <a v-else-if="sessione.loginAttivo" class="btn btn--linea" :href="linkAccesso(route.fullPath)">
+          Accedi<span class="accedi-lungo">&nbsp;con Discord</span>
+        </a>
+        <button
+          v-else
+          type="button"
+          class="btn btn--linea"
+          aria-disabled="true"
+          title="Il login con Discord non è ancora attivo"
+        >
+          Accedi<span class="accedi-lungo">&nbsp;con Discord</span>
+        </button>
+      </div>
     </div>
   </header>
 
   <main class="container pagina">
+    <p v-if="route.query.accesso === 'annullato'" class="avviso-riga" role="status">
+      Accesso con Discord annullato. Puoi riprovare quando vuoi.
+    </p>
     <RouterView />
   </main>
 

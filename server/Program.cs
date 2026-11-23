@@ -2,8 +2,12 @@
 // configurazione e segreti da variabili d'ambiente.
 // Dati: database della classifica, schema "fanta", utente in sola lettura (ConnectionStrings__Aoe).
 
+using System.Security.Claims;
 using Dapper;
 using FantaAoe.Api;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Npgsql;
 
 DefaultTypeMap.MatchNamesWithUnderscores = true;
@@ -16,11 +20,102 @@ NpgsqlDataSource? db = string.IsNullOrWhiteSpace(connessione) ? null : NpgsqlDat
 builder.Services.AddOutputCache(o =>
     o.AddPolicy("breve", p => p.Expire(TimeSpan.FromSeconds(60))));
 
+// ---------- accesso con Discord ----------
+var accesso = ConfigAccesso.DaAmbiente();
+
+// chiavi dei cookie di sessione: nel volume /keys, così un aggiornamento non disconnette nessuno
+var cartellaChiavi = Environment.GetEnvironmentVariable("CARTELLA_CHIAVI") ?? "/keys";
+var dp = builder.Services.AddDataProtection().SetApplicationName("fantaaoe");
+if (Directory.Exists(cartellaChiavi)) dp.PersistKeysToFileSystem(new DirectoryInfo(cartellaChiavi));
+
+var auth = builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(o =>
+    {
+        o.Cookie.Name = "fantaaoe";
+        o.Cookie.HttpOnly = true;
+        o.Cookie.SameSite = SameSiteMode.Lax;
+        o.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        o.ExpireTimeSpan = TimeSpan.FromDays(14);
+        o.SlidingExpiration = true;
+        o.Events.OnRedirectToLogin = c => { c.Response.StatusCode = 401; return Task.CompletedTask; };
+        o.Events.OnRedirectToAccessDenied = c => { c.Response.StatusCode = 403; return Task.CompletedTask; };
+    });
+if (accesso.Attivo)
+{
+    auth.AddDiscord(o =>
+    {
+        o.ClientId = accesso.ClientId!;
+        o.ClientSecret = accesso.ClientSecret!;
+        o.CallbackPath = "/api/auth/callback";
+        o.Scope.Add("guilds");
+        o.Scope.Add("guilds.members.read");
+        o.CorrelationCookie.SecurePolicy = CookieSecurePolicy.Always;
+        o.Events.OnCreatingTicket = c => Accesso.CompletaTicket(c, accesso);
+        o.Events.OnRemoteFailure = c =>
+        {
+            c.Response.Redirect("/?accesso=annullato");
+            c.HandleResponse();
+            return Task.CompletedTask;
+        };
+    });
+}
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
+
+// Dietro Funnel l'app vede http://jason-app:8080: per i cookie sicuri e per l'indirizzo di ritorno
+// di Discord si usa l'indirizzo pubblico.
+if (Uri.TryCreate(accesso.IndirizzoPubblico, UriKind.Absolute, out var pubblico))
+{
+    app.Use((ctx, next) =>
+    {
+        ctx.Request.Scheme = pubblico.Scheme;
+        ctx.Request.Host = new HostString(pubblico.Authority);
+        return next();
+    });
+}
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseOutputCache();
+
+// ---------- sessione ----------
+
+app.MapGet("/api/auth/login", (string? ritorno) =>
+    accesso.Attivo
+        ? Results.Challenge(new AuthenticationProperties { RedirectUri = Accesso.RitornoSicuro(ritorno) }, ["Discord"])
+        : Results.Redirect("/?accesso=non-configurato"));
+
+app.MapGet("/api/auth/esci", async (HttpContext ctx) =>
+{
+    await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    return Results.Redirect("/");
+});
+
+app.MapGet("/api/io", (ClaimsPrincipal u) =>
+{
+    var dentro = u.Identity?.IsAuthenticated == true;
+    var admin = u.IsInRole(Accesso.Admin);
+    return Results.Ok(new
+    {
+        loginAttivo = accesso.Attivo,
+        autenticato = dentro,
+        nome = dentro ? u.FindFirst("nome")?.Value : null,
+        avatar = dentro ? u.FindFirst("avatar")?.Value : null,
+        membro = dentro && u.HasClaim(c => c.Type == "membro"),
+        ruoli = dentro ? u.FindAll(ClaimTypes.Role).Select(c => c.Value).ToArray() : Array.Empty<string>(),
+        // solo per gli admin: serve a collegare i ruoli Discord ai pannelli
+        configurazione = admin ? new
+        {
+            discordId = u.FindFirst("discord_id")?.Value,
+            guildId = u.FindFirst("guild_id")?.Value,
+            ruoliDiscord = u.FindAll("ruolo_discord").Select(c => c.Value).ToArray(),
+        } : null,
+    });
+});
 
 // ---------- salute e info ----------
 

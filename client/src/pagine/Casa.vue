@@ -3,6 +3,12 @@ import { ref, onMounted } from 'vue'
 import { api, elo, fa } from '../api.js'
 import { consultazione, ruoli } from '../ruoli.js'
 import StatoDati from '../componenti/StatoDati.vue'
+import { sessione, puoEntrare } from '../sessione.js'
+
+const etichetta = (chiave) => {
+  if (!sessione.autenticato) return 'Con Discord'
+  return puoEntrare(chiave) ? 'Entra' : 'Non è il tuo ruolo'
+}
 
 const primi = ref([])
 const attivi = ref(0)
@@ -45,7 +51,9 @@ onMounted(carica)
           <RouterLink :to="`/pannello/${r.chiave}`">
             <span class="porta__nome">{{ r.nome }}</span>
             <span class="porta__cosa">{{ r.cosa }}</span>
-            <span class="porta__accesso">Con Discord</span>
+            <span class="porta__accesso" :class="{ 'porta__accesso--tuo': sessione.autenticato && puoEntrare(r.chiave) }">
+              {{ etichetta(r.chiave) }}
+            </span>
           </RouterLink>
         </li>
       </ul>
