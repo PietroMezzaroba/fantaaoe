@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 using Dapper;
 using Npgsql;
@@ -8,6 +9,25 @@ namespace FantaAoe.Api;
 public static class ApiTorneo
 {
     private const int MaxRosa = 10;
+    private static readonly HttpClient WebhookHttp = new() { Timeout = TimeSpan.FromSeconds(3) };
+
+    private static void InviaWebhook(string messaggio)
+    {
+        var url = Environment.GetEnvironmentVariable("DISCORD_WEBHOOK_STAFF");
+        if (string.IsNullOrWhiteSpace(url)) return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var content = new StringContent(
+                    JsonSerializer.Serialize(new { content = messaggio }),
+                    Encoding.UTF8,
+                    "application/json");
+                await WebhookHttp.PostAsync(url, content);
+            }
+            catch { /* mai bloccare l'app se Discord non risponde */ }
+        });
+    }
 
     private sealed class IdElo { public int Id { get; set; } public int Elo { get; set; } }
     private sealed class OffertaPrec { public int SquadraId { get; set; } public int Importo { get; set; } }
@@ -89,7 +109,7 @@ public static class ApiTorneo
             var iscrizione = await c.QuerySingleOrDefaultAsync<Iscritto>("""
                 select i.id, i.player_id, i.discord_id, i.nick, trim(i.fascia) as fascia,
                        i.seeding, i.prezzo_base, i.squadra_id, s.nome as squadra_nome,
-                       i.prezzo_asta, i.note,
+                       i.prezzo_asta, i.stato, i.note,
                        g.elo_interno, g.elo_1v1, g.elo_tg, g.n_diti, g.winrate
                 from fanta_torneo.iscritti i
                 left join fanta_torneo.squadre s on s.id = i.squadra_id
@@ -99,6 +119,41 @@ public static class ApiTorneo
                 """, new { did, pid = legame?.PlayerId });
 
             return Results.Ok(new { legame, giocatore, civ, iscrizione });
+        });
+
+        // Auto-iscrizione del giocatore alla 6ª edizione (entra in attesa di approvazione admin)
+        app.MapPost("/api/profilo/iscriviti", async (ClaimsPrincipal u) =>
+        {
+            if (db is null) return Results.Problem("Database non configurato", statusCode: 503);
+            if (!EAutenticato(u)) return Results.Unauthorized();
+            var did = DiscordId(u)!;
+            await RegistraUtenteDiscord(db, u);
+
+            await using var c = await db.OpenConnectionAsync();
+            var legame = await c.QuerySingleOrDefaultAsync<UtenteDiscord>("""
+                select u.discord_id, u.discord_nome, u.player_id, g.nick as player_nick
+                from fanta_torneo.utenti_discord u
+                left join fanta.giocatori g on g.player_id = u.player_id
+                where u.discord_id = @did
+                """, new { did });
+
+            var gia = await c.ExecuteScalarAsync<int?>("""
+                select id from fanta_torneo.iscritti
+                where discord_id = @did or (@pid is not null and player_id = @pid)
+                limit 1
+                """, new { did, pid = legame?.PlayerId });
+            if (gia is not null)
+                return Results.BadRequest(new { errore = "Risulti già iscritto al FantaAge 2026." });
+
+            var nick = !string.IsNullOrWhiteSpace(legame?.PlayerNick) ? legame.PlayerNick! : NomeUtente(u);
+            var id = await c.ExecuteScalarAsync<int>("""
+                insert into fanta_torneo.iscritti (player_id, discord_id, nick, fascia, prezzo_base, stato)
+                values (@pid, @did, @nick, 'C', 1, 'in_attesa')
+                returning id
+                """, new { pid = legame?.PlayerId, did, nick });
+
+            InviaWebhook($"📝 Nuova richiesta di iscrizione FantaAge 2026: **{nick}** (Discord: {NomeUtente(u)})");
+            return Results.Ok(new { id, stato = "in_attesa" });
         });
 
         app.MapPost("/api/profilo/collega", async (ClaimsPrincipal u, RichiestaCollega req) =>
@@ -147,12 +202,13 @@ public static class ApiTorneo
             var righe = await c.QueryAsync<Iscritto>("""
                 select i.id, i.player_id, i.discord_id, i.nick, trim(i.fascia) as fascia,
                        i.seeding, i.prezzo_base, i.squadra_id, s.nome as squadra_nome,
-                       i.prezzo_asta, i.note,
+                       i.prezzo_asta, i.stato, i.note,
                        g.elo_interno, g.elo_1v1, g.elo_tg, g.n_diti, g.winrate
                 from fanta_torneo.iscritti i
                 left join fanta_torneo.squadre s on s.id = i.squadra_id
                 left join fanta.giocatori g on g.player_id = i.player_id
-                order by i.fascia asc, i.seeding asc nulls last, g.elo_1v1 desc nulls last, i.nick asc
+                order by case i.stato when 'in_attesa' then 0 when 'approvato' then 1 else 2 end,
+                         i.fascia asc, i.seeding asc nulls last, g.elo_1v1 desc nulls last, i.nick asc
                 """);
             return Results.Ok(righe);
         });
@@ -213,6 +269,7 @@ public static class ApiTorneo
                 select i.id, coalesce(g.elo_1v1, g.elo_interno, 0) as elo
                 from fanta_torneo.iscritti i
                 left join fanta.giocatori g on g.player_id = i.player_id
+                where i.stato = 'approvato'
                 order by coalesce(g.elo_1v1, g.elo_interno, 0) desc, i.nick asc
                 """)).ToList();
 
@@ -238,7 +295,83 @@ public static class ApiTorneo
             if (!EAdmin(u)) return Results.Forbid();
             await using var c = await db.OpenConnectionAsync();
             await c.ExecuteAsync("delete from fanta_torneo.iscritti where id = @id", new { id });
+            await NotificaAsta(db, hub);
             return Results.Ok(new { ok = true });
+        });
+
+        app.MapPost("/api/admin/iscritti/{id:int}/stato", async (ClaimsPrincipal u, int id, RichiestaStatoIscritto req) =>
+        {
+            if (db is null) return Results.Problem("Database non configurato", statusCode: 503);
+            if (!EAdmin(u)) return Results.Forbid();
+            var stato = (req.Stato ?? "").Trim().ToLowerInvariant();
+            if (stato is not ("in_attesa" or "approvato" or "respinto"))
+                return Results.BadRequest(new { errore = "Stato non valido." });
+            await using var c = await db.OpenConnectionAsync();
+            await c.ExecuteAsync("update fanta_torneo.iscritti set stato = @stato where id = @id", new { id, stato });
+            await NotificaAsta(db, hub);
+            return Results.Ok(new { ok = true });
+        });
+
+        // Svincola un giocatore assegnato per errore e rimborsa i Berlu alla squadra
+        app.MapPost("/api/admin/iscritti/{id:int}/svincola", async (ClaimsPrincipal u, int id) =>
+        {
+            if (db is null) return Results.Problem("Database non configurato", statusCode: 503);
+            if (!EAdmin(u)) return Results.Forbid();
+
+            await using var c = await db.OpenConnectionAsync();
+            await using var tx = await c.BeginTransactionAsync();
+            var isc = await c.QuerySingleOrDefaultAsync<Iscritto>(
+                "select id, squadra_id, prezzo_asta from fanta_torneo.iscritti where id = @id for update",
+                new { id }, tx);
+            if (isc is null) return Results.NotFound(new { errore = "Iscritto non trovato." });
+            if (isc.SquadraId is null) return Results.BadRequest(new { errore = "Il giocatore non è assegnato a nessuna squadra." });
+
+            if (isc.PrezzoAsta is int prezzo && prezzo > 0)
+            {
+                await c.ExecuteAsync(
+                    "update fanta_torneo.squadre set berlu_residui = berlu_residui + @prezzo where id = @sid",
+                    new { prezzo, sid = isc.SquadraId.Value }, tx);
+            }
+            await c.ExecuteAsync(
+                "update fanta_torneo.iscritti set squadra_id = null, prezzo_asta = null where id = @id",
+                new { id }, tx);
+            await tx.CommitAsync();
+            await NotificaAsta(db, hub);
+            return Results.Ok(new { ok = true });
+        });
+
+        // Export CSV delle rose e degli iscritti
+        app.MapGet("/api/torneo/export/rose.csv", async () =>
+        {
+            if (db is null) return Results.Problem("Database non configurato", statusCode: 503);
+            await using var c = await db.OpenConnectionAsync();
+            var righe = await c.QueryAsync<Iscritto>("""
+                select i.id, i.nick, trim(i.fascia) as fascia, i.seeding, i.prezzo_base,
+                       s.nome as squadra_nome, i.prezzo_asta, i.stato,
+                       g.elo_interno, g.elo_1v1, g.elo_tg
+                from fanta_torneo.iscritti i
+                left join fanta_torneo.squadre s on s.id = i.squadra_id
+                left join fanta.giocatori g on g.player_id = i.player_id
+                where i.stato = 'approvato'
+                order by s.nome asc nulls last, i.fascia asc, i.seeding asc nulls last, i.nick asc
+                """);
+
+            static string Csv(string? v) => "\"" + (v ?? "").Replace("\"", "\"\"") + "\"";
+            var sb = new StringBuilder();
+            sb.AppendLine("Squadra,Fascia,Seed,Nick,ELO_1v1,ELO_Interno,ELO_TG,Prezzo_Berlu");
+            foreach (var r in righe)
+            {
+                sb.AppendLine(string.Join(",",
+                    Csv(r.SquadraNome ?? "Disponibile"),
+                    Csv(r.Fascia),
+                    r.Seeding?.ToString() ?? "",
+                    Csv(r.Nick),
+                    r.Elo1v1?.ToString() ?? "",
+                    r.EloInterno?.ToString() ?? "",
+                    r.EloTg?.ToString() ?? "",
+                    r.PrezzoAsta?.ToString() ?? ""));
+            }
+            return Results.File(Encoding.UTF8.GetBytes(sb.ToString()), "text/csv; charset=utf-8", "fantaage-rose.csv");
         });
 
         // Admin: utenti Discord visti al login e verifica collegamento
@@ -491,6 +624,7 @@ public static class ApiTorneo
                 returning id
                 """, new { did = DiscordId(u)!, nome = NomeUtente(u), tipo, titolo, desc });
 
+            InviaWebhook($"🎫 Nuovo ticket **#{id}** ({tipo}) da **{NomeUtente(u)}**: {titolo}");
             return Results.Ok(new { id });
         });
 
@@ -595,6 +729,7 @@ public static class ApiTorneo
                     offerta_attuale = 0,
                     squadra_migliore_id = null,
                     messaggio = null,
+                    scadenza_il = case when durata_timer_sec > 0 then now() + make_interval(secs => durata_timer_sec) else null end,
                     aggiornato_il = now()
                 where id = 1
                 """, new { id = req.IscrittoId });
@@ -612,12 +747,19 @@ public static class ApiTorneo
             if (stato is not ("attesa" or "in_corso" or "pausa" or "chiusa"))
                 return Results.BadRequest(new { errore = "Stato asta non valido." });
 
+            var durata = req.DurataTimerSec is int d ? Math.Clamp(d, 0, 120) : (int?)null;
             await using var c = await db.OpenConnectionAsync();
             await c.ExecuteAsync("""
                 update fanta_torneo.asta_stato
                 set stato = @stato,
                     messaggio = @msg,
                     turno_squadra_id = coalesce(@turno, turno_squadra_id),
+                    durata_timer_sec = coalesce(@durata, durata_timer_sec),
+                    scadenza_il = case
+                        when @stato = 'in_corso' and coalesce(@durata, durata_timer_sec) > 0
+                            then now() + make_interval(secs => coalesce(@durata, durata_timer_sec))
+                        else null
+                    end,
                     aggiornato_il = now()
                 where id = 1
                 """, new
@@ -625,6 +767,7 @@ public static class ApiTorneo
                 stato,
                 msg = string.IsNullOrWhiteSpace(req.Messaggio) ? null : req.Messaggio.Trim(),
                 turno = req.TurnoSquadraId,
+                durata,
             });
 
             await NotificaAsta(db, hub);
@@ -694,6 +837,7 @@ public static class ApiTorneo
                 update fanta_torneo.asta_stato
                 set offerta_attuale = @importo,
                     squadra_migliore_id = @squadraId,
+                    scadenza_il = case when durata_timer_sec > 0 then now() + make_interval(secs => durata_timer_sec) else null end,
                     aggiornato_il = now()
                 where id = 1
                 """, new { importo = req.Importo, squadraId = squadra.Id }, tx);
@@ -796,6 +940,11 @@ public static class ApiTorneo
                 }
             }
 
+            var nickAggiudicato = await c.ExecuteScalarAsync<string?>(
+                "select nick from fanta_torneo.iscritti where id = @iid", new { iid = asta.IscrittoId.Value }, tx);
+            var nomeSquadra = await c.ExecuteScalarAsync<string?>(
+                "select nome from fanta_torneo.squadre where id = @sid", new { sid = asta.SquadraMiglioreId.Value }, tx);
+
             await c.ExecuteAsync("""
                 update fanta_torneo.asta_stato
                 set stato = 'attesa',
@@ -805,12 +954,193 @@ public static class ApiTorneo
                     turno_squadra_id = @prossimoTurno,
                     round_numero = @prossimoRound,
                     messaggio = null,
+                    scadenza_il = null,
                     aggiornato_il = now()
                 where id = 1
                 """, new { prossimoTurno, prossimoRound }, tx);
 
             await tx.CommitAsync();
+            InviaWebhook($"🔨 Aggiudicato **{nickAggiudicato}** a **{nomeSquadra}** per **{asta.OffertaAttuale} Berlu**!");
             await NotificaAsta(db, hub);
+            return Results.Ok(new { ok = true });
+        });
+
+        // =====================================================================
+        // BLOCCO D: TORNEO (GIRONI, CALENDARIO PLAY ALL 3, CLASSIFICA, PLAYOFF)
+        // =====================================================================
+
+        app.MapGet("/api/torneo/tabellone", async () =>
+        {
+            if (db is null) return Results.Problem("Database non configurato", statusCode: 503);
+            await using var c = await db.OpenConnectionAsync();
+
+            var squadre = (await c.QueryAsync<Squadra>("""
+                select s.id, s.nome, s.capitano_discord_id, s.capitano_nome,
+                       s.berlu_iniziali, s.berlu_residui, s.ordine_chiamata, s.canale_discord_url,
+                       (select count(*) from fanta_torneo.iscritti i where i.squadra_id = s.id)::int as n_giocatori
+                from fanta_torneo.squadre s
+                order by s.ordine_chiamata asc, s.id asc
+                """)).ToList();
+
+            var incontri = (await c.QueryAsync<IncontroTorneo>("""
+                select t.id, t.fase, t.giornata, t.girone,
+                       t.squadra_a_id, sa.nome as squadra_a_nome,
+                       t.squadra_b_id, sb.nome as squadra_b_nome,
+                       t.vinte_a, t.vinte_b, t.data_programmata, t.stato, t.note, t.aggiornato_il
+                from fanta_torneo.torneo_incontri t
+                join fanta_torneo.squadre sa on sa.id = t.squadra_a_id
+                join fanta_torneo.squadre sb on sb.id = t.squadra_b_id
+                order by case t.fase when 'girone' then 1 when 'quarti' then 2 when 'semifinale' then 3 else 4 end,
+                         t.giornata asc, t.id asc
+                """)).ToList();
+
+            // Classifica gironi con regola FantaAge Play All 3: 3-0 -> 4, 2-1 -> 3, 1-2 -> 2, 0-3 -> 1
+            static int PuntiPlayAll3(int mie, int loro) => (mie, loro) switch
+            {
+                (3, 0) => 4,
+                (2, 1) => 3,
+                (1, 2) => 2,
+                (0, 3) => 1,
+                _ when mie > loro => 3,
+                _ => 1,
+            };
+
+            var mappa = squadre.ToDictionary(s => s.Id, s => new ClassificaSquadra
+            {
+                SquadraId = s.Id,
+                Nome = s.Nome,
+                CapitanoNome = s.CapitanoNome,
+            });
+
+            foreach (var inc in incontri.Where(x => x.Fase == "girone" && x.Stato == "giocato" && x.VinteA is not null && x.VinteB is not null))
+            {
+                var va = inc.VinteA!.Value;
+                var vb = inc.VinteB!.Value;
+                if (mappa.TryGetValue(inc.SquadraAId, out var a))
+                {
+                    a.Giocate++;
+                    if (va > vb) a.Vinte++; else a.Perse++;
+                    a.MappeVinte += va;
+                    a.MappePerse += vb;
+                    a.Punti += PuntiPlayAll3(va, vb);
+                }
+                if (mappa.TryGetValue(inc.SquadraBId, out var b))
+                {
+                    b.Giocate++;
+                    if (vb > va) b.Vinte++; else b.Perse++;
+                    b.MappeVinte += vb;
+                    b.MappePerse += va;
+                    b.Punti += PuntiPlayAll3(vb, va);
+                }
+            }
+
+            var classifica = mappa.Values
+                .OrderByDescending(x => x.Punti)
+                .ThenByDescending(x => x.MappeVinte - x.MappePerse)
+                .ThenByDescending(x => x.MappeVinte)
+                .ThenBy(x => x.Nome)
+                .ToList();
+
+            return Results.Ok(new { classifica, incontri, squadre });
+        });
+
+        app.MapPost("/api/admin/torneo/incontri", async (ClaimsPrincipal u, RichiestaIncontro req) =>
+        {
+            if (db is null) return Results.Problem("Database non configurato", statusCode: 503);
+            if (!EAdmin(u)) return Results.Forbid();
+
+            var fase = (req.Fase ?? "girone").Trim().ToLowerInvariant();
+            if (fase is not ("girone" or "quarti" or "semifinale" or "finale"))
+                return Results.BadRequest(new { errore = "Fase non valida." });
+            var stato = (req.Stato ?? "programmato").Trim().ToLowerInvariant();
+            if (stato is not ("programmato" or "giocato" or "rinviato"))
+                return Results.BadRequest(new { errore = "Stato incontro non valido." });
+            if (req.SquadraAId == req.SquadraBId)
+                return Results.BadRequest(new { errore = "Seleziona due squadre diverse." });
+
+            DateTime? dataProg = null;
+            if (!string.IsNullOrWhiteSpace(req.DataProgrammata) && DateTime.TryParse(req.DataProgrammata, out var dt))
+                dataProg = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+
+            var girone = string.IsNullOrWhiteSpace(req.Girone) ? "Unico" : req.Girone.Trim();
+            var giornata = Math.Max(1, req.Giornata);
+            var statoEff = (req.VinteA is not null && req.VinteB is not null) ? "giocato" : stato;
+
+            await using var c = await db.OpenConnectionAsync();
+            if (req.Id is int id)
+            {
+                await c.ExecuteAsync("""
+                    update fanta_torneo.torneo_incontri
+                    set fase = @fase, giornata = @giornata, girone = @girone,
+                        squadra_a_id = @SquadraAId, squadra_b_id = @SquadraBId,
+                        vinte_a = @VinteA, vinte_b = @VinteB,
+                        data_programmata = @dataProg, stato = @statoEff, note = @Note, aggiornato_il = now()
+                    where id = @id
+                    """, new { id, fase, giornata, girone, req.SquadraAId, req.SquadraBId, req.VinteA, req.VinteB, dataProg, statoEff, req.Note });
+                return Results.Ok(new { id });
+            }
+            else
+            {
+                var nuovoId = await c.ExecuteScalarAsync<int>("""
+                    insert into fanta_torneo.torneo_incontri (fase, giornata, girone, squadra_a_id, squadra_b_id, vinte_a, vinte_b, data_programmata, stato, note)
+                    values (@fase, @giornata, @girone, @SquadraAId, @SquadraBId, @VinteA, @VinteB, @dataProg, @statoEff, @Note)
+                    returning id
+                    """, new { fase, giornata, girone, req.SquadraAId, req.SquadraBId, req.VinteA, req.VinteB, dataProg, statoEff, req.Note });
+                return Results.Ok(new { id = nuovoId });
+            }
+        });
+
+        // Genera calendario girone all'italiana (Berger) tra tutte le squadre
+        app.MapPost("/api/admin/torneo/genera-girone", async (ClaimsPrincipal u) =>
+        {
+            if (db is null) return Results.Problem("Database non configurato", statusCode: 503);
+            if (!EAdmin(u)) return Results.Forbid();
+
+            await using var c = await db.OpenConnectionAsync();
+            var squadre = (await c.QueryAsync<int>("select id from fanta_torneo.squadre order by ordine_chiamata asc, id asc")).ToList();
+            if (squadre.Count < 2)
+                return Results.BadRequest(new { errore = "Servono almeno 2 squadre per generare il girone." });
+
+            var esistenti = await c.ExecuteScalarAsync<int>("select count(*) from fanta_torneo.torneo_incontri where fase = 'girone'");
+            if (esistenti > 0)
+                return Results.BadRequest(new { errore = "Esistono già incontri di girone. Eliminali prima di rigenerare." });
+
+            var lista = new List<int?>(squadre.Select(x => (int?)x));
+            if (lista.Count % 2 == 1) lista.Add(null); // riposo (bye)
+            var n = lista.Count;
+            var creati = 0;
+
+            await using var tx = await c.BeginTransactionAsync();
+            for (var round = 0; round < n - 1; round++)
+            {
+                for (var i = 0; i < n / 2; i++)
+                {
+                    var a = lista[i];
+                    var b = lista[n - 1 - i];
+                    if (a is int sa && b is int sb)
+                    {
+                        await c.ExecuteAsync("""
+                            insert into fanta_torneo.torneo_incontri (fase, giornata, girone, squadra_a_id, squadra_b_id, stato)
+                            values ('girone', @giornata, 'Unico', @sa, @sb, 'programmato')
+                            """, new { giornata = round + 1, sa, sb }, tx);
+                        creati++;
+                    }
+                }
+                // rotazione Berger (fissa elemento 0)
+                var ultimo = lista[^1];
+                lista.RemoveAt(lista.Count - 1);
+                lista.Insert(1, ultimo);
+            }
+            await tx.CommitAsync();
+            return Results.Ok(new { creati });
+        });
+
+        app.MapDelete("/api/admin/torneo/incontri/{id:int}", async (ClaimsPrincipal u, int id) =>
+        {
+            if (db is null) return Results.Problem("Database non configurato", statusCode: 503);
+            if (!EAdmin(u)) return Results.Forbid();
+            await using var c = await db.OpenConnectionAsync();
+            await c.ExecuteAsync("delete from fanta_torneo.torneo_incontri where id = @id", new { id });
             return Results.Ok(new { ok = true });
         });
     }
@@ -857,11 +1187,11 @@ public static class ApiTorneo
         var disponibili = await c.QueryAsync<Iscritto>("""
             select i.id, i.player_id, i.discord_id, i.nick, trim(i.fascia) as fascia,
                    i.seeding, i.prezzo_base, i.squadra_id, null::text as squadra_nome,
-                   i.prezzo_asta, i.note,
+                   i.prezzo_asta, i.stato, i.note,
                    g.elo_interno, g.elo_1v1, g.elo_tg, g.n_diti, g.winrate
             from fanta_torneo.iscritti i
             left join fanta.giocatori g on g.player_id = i.player_id
-            where i.squadra_id is null
+            where i.squadra_id is null and i.stato = 'approvato'
             order by i.fascia asc, i.seeding asc nulls last, i.nick asc
             """);
 
@@ -874,6 +1204,8 @@ public static class ApiTorneo
             turnoSquadraId = stato.TurnoSquadraId,
             roundNumero = stato.RoundNumero,
             messaggio = stato.Messaggio,
+            scadenzaIl = stato.ScadenzaIl,
+            durataTimerSec = stato.DurataTimerSec,
             aggiornatoIl = stato.AggiornatoIl,
             maxRosa = MaxRosa,
             giocatore = corrente,

@@ -31,6 +31,7 @@ onMounted(async () => {
       </RouterLink>
       <nav class="menu" aria-label="Sezioni">
         <RouterLink to="/pannelli">Pannelli</RouterLink>
+        <RouterLink to="/torneo">Torneo</RouterLink>
         <RouterLink to="/classifica">Classifica</RouterLink>
         <RouterLink to="/partite">Partite</RouterLink>
         <RouterLink to="/civilta">Civiltà</RouterLink>

@@ -6,13 +6,26 @@ export function usaAstaLive() {
   const dati = ref(null)
   const connesso = ref(false)
   const errore = ref(null)
+  const secondiRimasti = ref(null)
   let es = null
-  let timer = null
+  let reconnectTimer = null
+  let tickTimer = null
+
+  function aggiornaCountdown() {
+    const scad = dati.value?.scadenzaIl
+    if (!scad || dati.value?.stato !== 'in_corso') {
+      secondiRimasti.value = null
+      return
+    }
+    const diff = Math.ceil((new Date(scad).getTime() - Date.now()) / 1000)
+    secondiRimasti.value = Math.max(0, diff)
+  }
 
   async function ricarica() {
     try {
       dati.value = await api('asta/stato')
       errore.value = null
+      aggiornaCountdown()
     } catch (e) {
       errore.value = e.message
     }
@@ -30,6 +43,7 @@ export function usaAstaLive() {
         dati.value = JSON.parse(ev.data)
         connesso.value = true
         errore.value = null
+        aggiornaCountdown()
       } catch {
         /* ignora messaggi malformati */
       }
@@ -38,20 +52,22 @@ export function usaAstaLive() {
       connesso.value = false
       es?.close()
       es = null
-      clearTimeout(timer)
-      timer = setTimeout(connetti, 3000)
+      clearTimeout(reconnectTimer)
+      reconnectTimer = setTimeout(connetti, 3000)
     }
   }
 
   onMounted(() => {
     ricarica()
     connetti()
+    tickTimer = setInterval(aggiornaCountdown, 250)
   })
 
   onUnmounted(() => {
-    clearTimeout(timer)
+    clearTimeout(reconnectTimer)
+    clearInterval(tickTimer)
     es?.close()
   })
 
-  return { dati, connesso, errore, ricarica }
+  return { dati, connesso, errore, secondiRimasti, ricarica }
 }

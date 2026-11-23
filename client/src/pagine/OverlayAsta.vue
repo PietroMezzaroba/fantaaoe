@@ -5,7 +5,7 @@ import { elo } from '../api.js'
 import { usaAstaLive } from '../astaLive.js'
 
 const route = useRoute()
-const { dati: asta } = usaAstaLive()
+const { dati: asta, secondiRimasti } = usaAstaLive()
 
 const sfondoScuro = computed(() => route.query.sfondo === 'scuro')
 const squadraMigliore = computed(() =>
@@ -59,6 +59,10 @@ onUnmounted(() => {
         <div>
           <span class="obs-etichetta">OFFERTA ATTUALE</span>
           <strong class="obs-cifra">{{ asta.offertaAttuale }} <em>Berlu</em></strong>
+        </div>
+        <div v-if="secondiRimasti !== null" class="obs-timer" :class="{ 'obs-timer--urgente': secondiRimasti <= 5 }">
+          <span class="obs-etichetta">TEMPO</span>
+          <strong>{{ secondiRimasti }}s</strong>
         </div>
         <div class="obs-leader">
           <span class="obs-etichetta">IN VANTAGGIO</span>

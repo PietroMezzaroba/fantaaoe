@@ -5,7 +5,7 @@ import { sessione } from '../../sessione.js'
 import { usaAstaLive } from '../../astaLive.js'
 
 const scheda = ref('asta')
-const { dati: asta, connesso } = usaAstaLive()
+const { dati: asta, connesso, secondiRimasti } = usaAstaLive()
 
 const squadre = ref([])
 const iscritti = ref([])
@@ -192,6 +192,10 @@ onMounted(caricaDati)
               <div>
                 <span class="piccolo muto">In vantaggio</span>
                 <strong>{{ squadraMigliore ? squadraMigliore.nome : 'Nessuna offerta' }}</strong>
+              </div>
+              <div v-if="secondiRimasti !== null">
+                <span class="piccolo muto">Tempo</span>
+                <strong class="timer-cifra" :class="{ 'timer-cifra--urgente': secondiRimasti <= 5 }">{{ secondiRimasti }}s</strong>
               </div>
             </div>
 

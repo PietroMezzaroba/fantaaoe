@@ -13,6 +13,21 @@ const profilo = ref(null)
 const giocatori = ref([])
 const ricerca = ref('')
 const salvandoLegame = ref(false)
+const iscrivendosi = ref(false)
+
+async function iscrivitiTorneo() {
+  iscrivendosi.value = true
+  errore.value = null
+  try {
+    await apiPost('profilo/iscriviti', {})
+    profilo.value = await api('profilo')
+    avvisa('Richiesta di iscrizione inviata! In attesa di conferma admin.')
+  } catch (e) {
+    errore.value = e.message
+  } finally {
+    iscrivendosi.value = false
+  }
+}
 
 // Disponibilità (prossimi 14 giorni)
 const disponibilita = ref({})
@@ -197,17 +212,26 @@ onMounted(caricaTutto)
           </div>
           <div class="misura">
             <dt>FantaAge 2026</dt>
-            <dd v-if="profilo.iscrizione">Fascia {{ profilo.iscrizione.fascia }}</dd>
+            <dd v-if="profilo.iscrizione">
+              <template v-if="profilo.iscrizione.stato === 'in_attesa'">In attesa</template>
+              <template v-else-if="profilo.iscrizione.stato === 'respinto'">Respinta</template>
+              <template v-else>Fascia {{ profilo.iscrizione.fascia }}</template>
+            </dd>
             <dd v-else class="muto">—</dd>
             <small v-if="profilo.iscrizione">
-              <template v-if="profilo.iscrizione.squadraNome">
+              <template v-if="profilo.iscrizione.stato === 'in_attesa'">Richiesta inviata agli admin</template>
+              <template v-else-if="profilo.iscrizione.squadraNome">
                 {{ profilo.iscrizione.squadraNome }} · {{ profilo.iscrizione.prezzoAsta }} Berlu
               </template>
               <template v-else>
                 Seed {{ profilo.iscrizione.seeding ?? 'n.d.' }} · base {{ profilo.iscrizione.prezzoBase }} Berlu
               </template>
             </small>
-            <small v-else>Non ancora in lista iscritti</small>
+            <small v-else>
+              <button type="button" class="btn btn--sm" :disabled="iscrivendosi" @click="iscrivitiTorneo">
+                {{ iscrivendosi ? 'Invio...' : 'Iscriviti al FantaAge' }}
+              </button>
+            </small>
           </div>
         </dl>
 
