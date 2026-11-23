@@ -1,6 +1,8 @@
 <script setup>
 // L'elmo di AoE Italia come nuvola di punti 3D (dal logo della community, strumenti/genera_punti.py).
-// Il puntatore inclina la vista e scosta i punti vicini; una scansione lo attraversa ogni sette secondi.
+// All'apertura i punti arrivano sparsi e si ricompongono ruotando; poi l'elmo ondeggia da solo e un passaggio
+// automatico gli scorre sopra. Il puntatore vero, se si muove, prende il posto di quello automatico.
+// Una scansione lo attraversa ogni sette secondi.
 // Si ferma fuori schermo, con la scheda nascosta, col bottone di pausa e con "riduci movimento".
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 
@@ -15,7 +17,9 @@ const pronto = ref(false)
 let ctx, dati, n, raf = 0, visibile = true, ridotto = false
 let larghezza = 0, altezza = 0, dpr = 1
 let colori = {}
-let spostX, spostY
+let spostX, spostY, sparsi
+let ultimoMovimento = -1e9
+const INGRESSO = 2.4
 const mira = { x: 0, y: 0 }, vista = { x: 0, y: 0 }
 const puntatore = { x: -9999, y: -9999, attivo: false }
 let inizio = 0
@@ -46,10 +50,12 @@ function disegna(ora) {
   const t = (ora - inizio) / 1000
   ctx.clearRect(0, 0, larghezza, altezza)
 
-  // vista: oscillazione lenta + puntatore, smorzata
-  const ozio = ridotto || inPausa.value ? 0 : Math.sin(t / 9) * 0.22
-  vista.x += (mira.x + ozio - vista.x) * 0.06
-  vista.y += (mira.y - vista.y) * 0.06
+  // vista: ondeggia da sola (ben visibile) + puntatore, smorzata
+  const fermo = ridotto || inPausa.value
+  const ozioX = fermo ? 0 : Math.sin((t * Math.PI * 2) / 16) * 0.5
+  const ozioY = fermo ? 0 : Math.sin((t * Math.PI * 2) / 11) * 0.12
+  vista.x += (mira.x + ozioX - vista.x) * 0.05
+  vista.y += (mira.y + ozioY - vista.y) * 0.05
   const cy = Math.cos(vista.x), sy = Math.sin(vista.x)
   const cx = Math.cos(vista.y), sx = Math.sin(vista.y)
 
@@ -57,9 +63,20 @@ function disegna(ora) {
   const f = 1100
   const ox = larghezza * props.centroX, oy = altezza * 0.5
 
-  // ingresso: i punti si raccolgono in 0,8 s
-  const arrivo = ridotto ? 1 : Math.min(1, t / 0.8)
-  const raccolta = 1 - Math.pow(1 - arrivo, 3)
+  // ingresso: i punti arrivano sparsi e si ricompongono ruotando
+  const arrivo = ridotto ? 1 : Math.min(1, t / INGRESSO)
+  const raccolta = 1 - Math.pow(1 - arrivo, 4)
+  const giro = (1 - raccolta) * 2.6
+  const cg = Math.cos(giro), sg = Math.sin(giro)
+
+  // passaggio automatico: se il mouse non si muove da 2,5 s, un puntatore invisibile scorre sull'elmo
+  if (!fermo && arrivo >= 1 && ora - ultimoMovimento > 2500) {
+    const lw = 1550 * Math.min((larghezza * props.quota) / 1550, altezza / 1300)
+    const lh = 1300 * Math.min((larghezza * props.quota) / 1550, altezza / 1300)
+    puntatore.x = larghezza * props.centroX + Math.sin(t * 0.55) * lw * 0.38
+    puntatore.y = altezza * 0.5 + Math.sin(t * 0.9 + 1.2) * lh * 0.3
+    puntatore.attivo = true
+  }
 
   // scansione: un piano che attraversa l'elmo da sinistra a destra ogni 7 s
   const ciclo = ridotto ? 0.5 : (t % 7) / 7
@@ -72,7 +89,11 @@ function disegna(ora) {
 
   for (let i = 0; i < n; i++) {
     const k = i * 4
-    let x = p[k] * (2 - raccolta), y = p[k + 1] * (2 - raccolta), z = p[k + 2] + (1 - raccolta) * 400
+    const sp = 1 - raccolta
+    let x0 = p[k] + sparsi[i * 3] * sp, y = p[k + 1] + sparsi[i * 3 + 1] * sp, z0 = p[k + 2] + sparsi[i * 3 + 2] * sp
+    // durante l'ingresso l'elmo gira su se stesso
+    let x = x0 * cg + z0 * sg
+    let z = -x0 * sg + z0 * cg
     const c = p[k + 3]
     // rotazione: imbardata (x) poi beccheggio (y)
     const x1 = x * cy + z * sy
@@ -134,6 +155,7 @@ function muovi(e) {
   puntatore.x = e.clientX - r.left
   puntatore.y = e.clientY - r.top
   puntatore.attivo = true
+  ultimoMovimento = performance.now()
   if (inPausa.value || ridotto) avvia()
 }
 function esci() {
@@ -168,6 +190,15 @@ onMounted(async () => {
     n = j.n
     spostX = new Float32Array(n)
     spostY = new Float32Array(n)
+    // punti di partenza sparsi in una sfera larga
+    sparsi = new Float32Array(n * 3)
+    for (let i = 0; i < n; i++) {
+      const u = Math.random() * 2 - 1, a = Math.random() * Math.PI * 2, r = 900 + Math.random() * 900
+      const q = Math.sqrt(1 - u * u)
+      sparsi[i * 3] = q * Math.cos(a) * r
+      sparsi[i * 3 + 1] = q * Math.sin(a) * r
+      sparsi[i * 3 + 2] = u * r
+    }
   } catch {
     return
   }
