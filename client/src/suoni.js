@@ -5,7 +5,8 @@
 // - suonoAggiudicato(): martelletto + accordo finale
 import { ref } from 'vue'
 
-export const audioAttivo = ref(false)
+// Attivo di default a meno che l'utente non lo abbia spento esplicitamente
+export const audioAttivo = ref(localStorage.getItem('fantaage_muto') !== '1')
 export const volumeAudio = ref(Number(localStorage.getItem('fantaage_vol') ?? 35))
 
 let ctx = null
@@ -18,6 +19,11 @@ function ottieniCtx() {
   }
   if (ctx.state === 'suspended') ctx.resume().catch(() => {})
   return ctx
+}
+
+export function audioPronto() {
+  const c = ottieniCtx()
+  return !!c && c.state === 'running'
 }
 
 function scalaGain() {

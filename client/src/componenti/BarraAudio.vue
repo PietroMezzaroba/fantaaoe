@@ -1,6 +1,6 @@
 <script setup>
-import { ref, onUnmounted } from 'vue'
-import { audioAttivo, volumeAudio, suonoIngresso } from '../suoni.js'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { audioAttivo, volumeAudio, suonoIngresso, audioPronto } from '../suoni.js'
 
 const tracce = [
   { id: 'jrrr7w4wz18', nome: 'Age of Kings (1999)' },
@@ -10,6 +10,7 @@ const tracce = [
 const indice = ref(0)
 const aperto = ref(false)
 const ytPronto = ref(false)
+const partito = ref(false)
 let player = null
 let avvioTimer = null
 
@@ -53,7 +54,6 @@ async function assicuraPlayer() {
           resolve(player)
         },
         onStateChange: (e) => {
-          // 0 = ENDED -> passa alla traccia successiva
           if (e.data === 0 && audioAttivo.value) cambiaTraccia()
         },
       },
@@ -61,19 +61,14 @@ async function assicuraPlayer() {
   })
 }
 
-async function toggleAudio() {
-  clearTimeout(avvioTimer)
-  if (audioAttivo.value) {
-    audioAttivo.value = false
-    try { player?.pauseVideo() } catch {}
-    return
-  }
-
-  audioAttivo.value = true
+async function avviaSequenza() {
+  if (!audioAttivo.value || partito.value) return
+  partito.value = true
+  rimuoviListenerSblocco()
   suonoIngresso()
 
   const p = await assicuraPlayer()
-  // Lascia sfumare il suono del fuoco/accordo prima della musica di AoE2
+  clearTimeout(avvioTimer)
   avvioTimer = setTimeout(() => {
     if (!audioAttivo.value) return
     try {
@@ -81,6 +76,40 @@ async function toggleAudio() {
       p.playVideo()
     } catch {}
   }, 1150)
+}
+
+function alPrimoGesto() {
+  if (!audioAttivo.value || partito.value) return
+  avviaSequenza()
+}
+
+function aggiungiListenerSblocco() {
+  window.addEventListener('pointerdown', alPrimoGesto, { passive: true })
+  window.addEventListener('keydown', alPrimoGesto, { passive: true })
+  window.addEventListener('touchstart', alPrimoGesto, { passive: true })
+}
+
+function rimuoviListenerSblocco() {
+  window.removeEventListener('pointerdown', alPrimoGesto)
+  window.removeEventListener('keydown', alPrimoGesto)
+  window.removeEventListener('touchstart', alPrimoGesto)
+}
+
+async function toggleAudio() {
+  clearTimeout(avvioTimer)
+  if (audioAttivo.value && partito.value) {
+    audioAttivo.value = false
+    partito.value = false
+    localStorage.setItem('fantaage_muto', '1')
+    rimuoviListenerSblocco()
+    try { player?.pauseVideo() } catch {}
+    return
+  }
+
+  audioAttivo.value = true
+  localStorage.removeItem('fantaage_muto')
+  partito.value = false
+  await avviaSequenza()
 }
 
 async function cambiaTraccia() {
@@ -100,8 +129,22 @@ function cambiaVolume(e) {
   try { player?.setVolume(v) } catch {}
 }
 
+onMounted(() => {
+  if (!audioAttivo.value) return
+  // Pre-carica YouTube subito così appena scatta il fuoco la OST è già pronta
+  assicuraPlayer()
+  // Prova ad avviare subito (funziona se il browser consente autoplay sul dominio)
+  if (audioPronto()) {
+    avviaSequenza()
+  } else {
+    // Altrimenti sblocca automaticamente al primissimo clic/tap ovunque nella pagina
+    aggiungiListenerSblocco()
+  }
+})
+
 onUnmounted(() => {
   clearTimeout(avvioTimer)
+  rimuoviListenerSblocco()
   try { player?.destroy() } catch {}
 })
 </script>
