@@ -3,8 +3,8 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { audioAttivo, volumeAudio, suonoIngresso, audioPronto } from '../suoni.js'
 
 const tracce = [
-  { id: 'jrrr7w4wz18', nome: 'Age of Kings (1999)' },
-  { id: 'O9mxrurGTqo', nome: 'The Conquerors' },
+  { id: 'jrrr7w4wz18', nome: 'Age of Kings (1999)', inizio: 20 },
+  { id: 'O9mxrurGTqo', nome: 'The Conquerors', inizio: 0 },
 ]
 
 const indice = ref(0)
@@ -44,6 +44,7 @@ async function assicuraPlayer() {
         autoplay: 0,
         controls: 0,
         loop: 1,
+        start: tracce[indice.value].inizio,
         playlist: tracce[indice.value].id,
         playsinline: 1,
       },
@@ -72,6 +73,10 @@ async function avviaSequenza() {
   avvioTimer = setTimeout(() => {
     if (!audioAttivo.value) return
     try {
+      const start = tracce[indice.value].inizio || 0
+      if (start > 0 && typeof p.getCurrentTime === 'function' && p.getCurrentTime() < start) {
+        p.seekTo(start, true)
+      }
       p.setVolume(volumeAudio.value)
       p.playVideo()
     } catch {}
@@ -117,7 +122,7 @@ async function cambiaTraccia() {
   if (!audioAttivo.value) return
   const p = await assicuraPlayer()
   try {
-    p.loadVideoById(tracce[indice.value].id)
+    p.loadVideoById({ videoId: tracce[indice.value].id, startSeconds: tracce[indice.value].inizio || 0 })
     p.setVolume(volumeAudio.value)
   } catch {}
 }
