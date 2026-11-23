@@ -35,8 +35,8 @@ onMounted(carica)
   <div class="casa">
     <section aria-labelledby="titolo-pannelli">
       <div class="casa__intro">
-        <h1 id="titolo-pannelli">Il fanta dei TG Dito</h1>
-        <p>Scegli il tuo pannello. La classifica e lo storico sono aperti a tutti.</p>
+        <h1 id="titolo-pannelli">I pannelli del torneo</h1>
+        <p>Scegli il tuo pannello. Classifica e statistiche dei giocatori sono aperte a tutti.</p>
       </div>
 
       <ul class="porte">

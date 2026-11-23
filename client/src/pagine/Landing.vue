@@ -32,8 +32,8 @@ const sconfitti = computed(() => ultimo.value?.giocatori.filter((g) => !g.vinto)
   <section class="eroe" aria-labelledby="titolo-eroe">
     <div class="container eroe__griglia">
       <div class="eroe__testo">
-        <h1 id="titolo-eroe">Il fanta dei TG Dito</h1>
-        <p class="lead">Asta, squadre e classifica della community Age of Empires Italia.</p>
+        <h1 id="titolo-eroe">Il torneo fanta di AoE Italia</h1>
+        <p class="lead">Capitani, asta e squadre della community Age of Empires Italia.</p>
         <div class="eroe__azioni">
           <RouterLink to="/pannelli" class="btn btn--grande">Entra nei pannelli</RouterLink>
           <RouterLink to="/classifica" class="btn btn--linea btn--grande">Apri la classifica</RouterLink>

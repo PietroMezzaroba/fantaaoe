@@ -4,7 +4,7 @@
 export const consultazione = {
   chiave: 'consulta',
   nome: 'Consulta',
-  cosa: 'Classifica, partite e civiltà dei TG Dito',
+  cosa: 'ELO, storico e civiltà dei giocatori',
   link: '/classifica',
   accesso: 'Libero',
 }
