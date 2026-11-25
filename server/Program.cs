@@ -85,6 +85,7 @@ public class Program
             });
         }
         builder.Services.AddAuthorization();
+        builder.Services.AddSignalR();
 
         var app = builder.Build();
 
@@ -116,6 +117,7 @@ public class Program
         app.UseOutputCache();
 
         app.MapControllers();
+        app.MapHub<AstaHub>(AstaHub.Percorso);
 
         // una rotta /api che non esiste è un 404 in JSON (non la pagina della SPA, che il client scambierebbe per dati)
         app.MapFallback("/api/{**percorso}", (HttpContext c) =>

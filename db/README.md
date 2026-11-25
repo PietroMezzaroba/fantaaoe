@@ -9,7 +9,7 @@ psql -d fantaaoe -f db/setup-locale.sql
 ```
 Lo script crea:
 - lo schema `fanta` (tabelle equivalenti alle viste di produzione dei TG Dito + 6 giocatori e 2 partite di esempio);
-- lo schema `fanta_torneo` (identico a produzione: `utenti_discord`, `squadre`, `utenti_iscritti`, `disponibilita`, `ticket`, `asta_portafoglio_utente`, `asta_ordine_capitani`, `asta_giocatori_acquistati`, `configurazioni`).
+- lo schema `fanta_torneo` (identico a produzione: `utenti_discord`, `squadre`, `utenti_iscritti`, `disponibilita`, `ticket`, `asta_portafoglio_utente`, `asta_ordine_capitani`, `asta_giocatori_acquistati`, `asta_giocatori_chiamati`, `asta_offerte`, `configurazioni`).
 
 ## 2. Avvia il backend .NET puntando al DB locale
 Imposta la variabile d'ambiente `ConnectionStrings__Aoe` (o mettila in `server/appsettings.Development.json`, che non va committato):
