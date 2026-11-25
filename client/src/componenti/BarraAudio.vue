@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { audioAttivo, volumeAudio, suonoIngresso } from '../suoni.js'
+import { audioAttivo, volumeAudio, suonoIngresso, avvioRichiesto } from '../suoni.js'
 
 const tracce = [
   { id: 'jrrr7w4wz18', nome: 'Age of Kings (1999)', inizio: 20 },
@@ -160,6 +160,12 @@ function cambiaVolume(e) {
 
 onMounted(() => {
   if (!audioAttivo.value) return
+  // appena acceso dal profilo: l'utente ha appena cliccato, si parte subito
+  if (avvioRichiesto.value) {
+    avvioRichiesto.value = false
+    avviaAlClick()
+    return
+  }
   // Pre-carica YouTube fermo (autoplay: 0) e aspetta il primo click per far partire tutto pulito dall'inizio
   assicuraPlayer()
   aggiungiListenerSblocco()

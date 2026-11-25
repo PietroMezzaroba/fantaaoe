@@ -2,9 +2,11 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from './api.js'
-import { sessione, caricaSessione, linkAccesso } from './sessione.js'
+import { sessione, caricaSessione, linkAccesso, accedi } from './sessione.js'
 import BarraAudio from './componenti/BarraAudio.vue'
+import { audioAbilitato } from './suoni.js'
 import EffettiUi from './componenti/EffettiUi.vue'
+import AccessoSviluppo from './componenti/AccessoSviluppo.vue'
 
 const route = useRoute()
 const handbook = ref(null)
@@ -32,22 +34,28 @@ onMounted(async () => {
         </span>
       </RouterLink>
       <nav class="menu" aria-label="Sezioni">
+        <RouterLink to="/asta">Asta</RouterLink>
+        <!-- voci nascoste per ora (le pagine esistono ancora): Pannelli, Torneo, Classifica, Partite
         <RouterLink to="/pannelli">Pannelli</RouterLink>
         <RouterLink to="/torneo">Torneo</RouterLink>
         <RouterLink to="/classifica">Classifica</RouterLink>
         <RouterLink to="/partite">Partite</RouterLink>
+        -->
         <RouterLink to="/civilta">Civiltà</RouterLink>
+        <RouterLink v-if="sessione.autenticato && sessione.ruoli.includes('admin')" to="/admin">Admin</RouterLink>
         <a v-if="handbook" :href="handbook" target="_blank" rel="noopener">Handbook</a>
       </nav>
 
       <div class="barra__accedi">
-        <BarraAudio />
+        <BarraAudio v-if="sessione.caricata && audioAbilitato" />
         <div v-if="sessione.autenticato" class="utente">
-          <img v-if="sessione.avatar" class="utente__foto" :src="sessione.avatar" alt="" width="32" height="32" />
-          <span class="utente__nome">{{ sessione.nome }}</span>
+          <RouterLink to="/profilo" class="utente__profilo" :title="'Il tuo profilo'" :aria-label="`Il tuo profilo: ${sessione.nome}`">
+            <img v-if="sessione.avatar" class="utente__foto" :src="sessione.avatar" alt="" width="32" height="32" />
+            <span class="utente__nome">{{ sessione.nome }}</span>
+          </RouterLink>
           <a class="btn btn--linea" href="/api/auth/esci">Esci</a>
         </div>
-        <a v-else-if="sessione.loginAttivo" class="btn btn--linea" :href="linkAccesso(route.fullPath)">
+        <a v-else-if="sessione.loginAttivo || sessione.loginSviluppo" class="btn btn--linea" :href="linkAccesso(route.fullPath)" @click="accedi">
           Accedi<span class="accedi-lungo">con Discord</span>
         </a>
         <button
@@ -77,5 +85,6 @@ onMounted(async () => {
     </div>
   </footer>
   <EffettiUi />
+  <AccessoSviluppo v-if="sessione.loginSviluppo" />
   </template>
 </template>

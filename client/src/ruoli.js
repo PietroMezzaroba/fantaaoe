@@ -25,10 +25,9 @@ export const ruoli = [
   {
     chiave: 'capitano',
     nome: 'Capitano',
-    cosa: 'Asta, rosa e squadra',
+    cosa: 'Rosa e squadra',
     intro: 'Tutto quello che serve a costruire e guidare la squadra.',
     funzioni: [
-      ['Asta dal vivo', 'Il giocatore all\'asta, il turno, i token spesi e quelli rimasti, in tempo reale.'],
       ['Seeding e prezzi', 'Il seeding di ogni giocatore e quanto è stato pagato.'],
       ['La tua rosa', 'I giocatori presi, i loro ELO e le disponibilità della settimana.'],
       ['Canale della squadra', 'Il collegamento alla chat del team su Discord.'],
@@ -37,24 +36,12 @@ export const ruoli = [
   {
     chiave: 'admin',
     nome: 'Admin',
-    cosa: 'Conduzione dell\'asta, giocatori, ticket',
-    intro: 'La regia del fanta: asta, iscritti e segnalazioni.',
+    cosa: 'Iscritti, giocatori, ticket',
+    intro: 'La regia del fanta: iscritti e segnalazioni.',
     funzioni: [
-      ['Regia dell\'asta', 'Avvio, pausa e salvataggio; correzione di un\'offerta sbagliata.'],
       ['Iscritti e seeding', 'Chi partecipa, in che fascia, con quale prezzo di partenza.'],
       ['Ticket', 'Segnalazioni, restart e infrazioni da gestire, con lo storico delle decisioni.'],
       ['Capitani e streamer', 'Chi ha accesso a quale pannello.'],
-    ],
-  },
-  {
-    chiave: 'streamer',
-    nome: 'Streamer',
-    cosa: 'Overlay dell\'asta per la diretta',
-    intro: 'L\'asta pronta da mettere in diretta, senza aggiornare niente a mano.',
-    funzioni: [
-      ['Overlay per OBS', 'Una pagina da aggiungere come sorgente browser: giocatore all\'asta, offerte, token.'],
-      ['Sempre aggiornato', 'L\'overlay segue l\'asta da solo mentre l\'admin la conduce.'],
-      ['Pausa visibile', 'Quando l\'asta è in pausa, l\'overlay lo mostra.'],
     ],
   },
 ]

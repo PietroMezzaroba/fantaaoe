@@ -100,31 +100,37 @@ CREATE TABLE IF NOT EXISTS fanta_torneo.utenti_discord (
 );
 
 CREATE TABLE IF NOT EXISTS fanta_torneo.squadre (
-    id                   serial PRIMARY KEY,
-    nome                 text NOT NULL UNIQUE,
-    capitano_discord_id  text,
-    capitano_nome        text NOT NULL,
-    berlu_iniziali       int NOT NULL DEFAULT 401,
-    berlu_residui        int NOT NULL DEFAULT 401,
-    ordine_chiamata      int NOT NULL DEFAULT 1,
-    canale_discord_url   text,
-    creata_il            timestamptz NOT NULL DEFAULT now()
+    id    serial PRIMARY KEY,
+    nome  text NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS fanta_torneo.iscritti (
-    id           serial PRIMARY KEY,
-    player_id    int UNIQUE,
-    discord_id   text UNIQUE,
-    nick         text NOT NULL,
-    fascia       char(1) NOT NULL DEFAULT 'C' CHECK (fascia IN ('A','B','C')),
-    seeding      int,
-    prezzo_base  int NOT NULL DEFAULT 1,
-    squadra_id   int REFERENCES fanta_torneo.squadre(id) ON DELETE SET NULL,
-    prezzo_asta  int,
-    stato        text NOT NULL DEFAULT 'approvato' CHECK (stato IN ('in_attesa','approvato','respinto')),
-    note         text,
-    iscritto_il  timestamptz NOT NULL DEFAULT now()
+-- Iscrizioni al torneo: un solo record per utente, creato quando l'utente conferma l'iscrizione dalla homepage.
+CREATE TABLE IF NOT EXISTS fanta_torneo.utenti_iscritti (
+    id_discord         text PRIMARY KEY REFERENCES fanta_torneo.utenti_discord(discord_id) ON DELETE CASCADE,
+    id_squadra         int REFERENCES fanta_torneo.squadre(id),
+    nickname           text,
+    fascia             text NOT NULL,
+    seeding            int NOT NULL,
+    prezzo_base        int,
+    prezzo_asta        int,
+    stato              text NOT NULL DEFAULT 'nessuno',
+    note               text NOT NULL DEFAULT '',
+    data_iscrizione    timestamptz NOT NULL DEFAULT now(),
+    stato_validazione  text NOT NULL DEFAULT 'in_validazione',
+    elo_calcolato      int NOT NULL DEFAULT 0  -- ELO dell'iscritto calcolato dall'app (0 = non ancora calcolato)
 );
+
+-- la posizione dell'iscritto non si duplica: sono i ruoli in utenti_ruoli (colonna rimossa se creata in precedenza)
+ALTER TABLE fanta_torneo.utenti_iscritti DROP COLUMN IF EXISTS posizione;
+-- per chi aveva già creato la tabella senza elo_calcolato
+ALTER TABLE fanta_torneo.utenti_iscritti ADD COLUMN IF NOT EXISTS elo_calcolato int NOT NULL DEFAULT 0;
+
+-- Capitano della squadra: un utente (nullable), che deve avere il ruolo "capitano" (controllato dall'API).
+-- Il vincolo è su utenti_discord e non su utenti_iscritti: il capitano può non essere iscritto come giocatore.
+ALTER TABLE fanta_torneo.squadre ADD COLUMN IF NOT EXISTS id_capitano text;
+ALTER TABLE fanta_torneo.squadre DROP CONSTRAINT IF EXISTS squadre_id_capitano_fkey;
+ALTER TABLE fanta_torneo.squadre ADD CONSTRAINT squadre_id_capitano_fkey
+    FOREIGN KEY (id_capitano) REFERENCES fanta_torneo.utenti_discord(discord_id);
 
 CREATE TABLE IF NOT EXISTS fanta_torneo.disponibilita (
     id             serial PRIMARY KEY,
@@ -151,52 +157,43 @@ CREATE TABLE IF NOT EXISTS fanta_torneo.ticket (
     aggiornato_il      timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS fanta_torneo.asta_stato (
-    id                   int PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-    stato                text NOT NULL DEFAULT 'attesa' CHECK (stato IN ('attesa','in_corso','pausa','chiusa')),
-    iscritto_id          int REFERENCES fanta_torneo.iscritti(id) ON DELETE SET NULL,
-    offerta_attuale      int NOT NULL DEFAULT 0,
-    squadra_migliore_id  int REFERENCES fanta_torneo.squadre(id) ON DELETE SET NULL,
-    turno_squadra_id     int REFERENCES fanta_torneo.squadre(id) ON DELETE SET NULL,
-    round_numero         int NOT NULL DEFAULT 1,
-    messaggio            text,
-    scadenza_il          timestamptz,
-    durata_timer_sec     int NOT NULL DEFAULT 15,
-    aggiornato_il        timestamptz NOT NULL DEFAULT now()
+-- Configurazioni globali dell'applicazione (non legate a un utente): chiave -> valore, con la spiegazione di cosa fanno
+CREATE TABLE IF NOT EXISTS fanta_torneo.configurazioni (
+    chiave       text PRIMARY KEY,
+    valore       text NOT NULL,
+    descrizione  text NOT NULL
 );
 
-INSERT INTO fanta_torneo.asta_stato (id, stato) VALUES (1, 'attesa') ON CONFLICT (id) DO NOTHING;
+INSERT INTO fanta_torneo.configurazioni (chiave, valore, descrizione)
+VALUES ('credito_iniziale', '401', 'Credito virtuale iniziale di ogni capitano per l''asta: è il valore a cui il reset riporta il portafoglio')
+ON CONFLICT (chiave) DO NOTHING;
 
-CREATE TABLE IF NOT EXISTS fanta_torneo.asta_offerte (
-    id           serial PRIMARY KEY,
-    iscritto_id  int NOT NULL REFERENCES fanta_torneo.iscritti(id) ON DELETE CASCADE,
-    squadra_id   int NOT NULL REFERENCES fanta_torneo.squadre(id) ON DELETE CASCADE,
-    importo      int NOT NULL,
-    annullata    boolean NOT NULL DEFAULT false,
-    creata_da    text NOT NULL,
-    creata_il    timestamptz NOT NULL DEFAULT now()
+-- Asta (da riscrivere da capo): le vecchie tabelle asta_stato e asta_offerte sono state eliminate
+
+-- Portafoglio d'asta di un utente: credito virtuale iniziale e credito che gli resta
+CREATE TABLE IF NOT EXISTS fanta_torneo.asta_portafoglio_utente (
+    id_utente         text PRIMARY KEY REFERENCES fanta_torneo.utenti_discord (discord_id),
+    credito_iniziale  int NOT NULL DEFAULT 400 CHECK (credito_iniziale >= 0),
+    credito_residuo   int NOT NULL DEFAULT 400 CHECK (credito_residuo >= 0)
 );
 
-CREATE TABLE IF NOT EXISTS fanta_torneo.torneo_incontri (
-    id                 serial PRIMARY KEY,
-    fase               text NOT NULL DEFAULT 'girone' CHECK (fase IN ('girone','quarti','semifinale','finale')),
-    giornata           int NOT NULL DEFAULT 1,
-    girone             text NOT NULL DEFAULT 'Unico',
-    squadra_a_id       int NOT NULL REFERENCES fanta_torneo.squadre(id) ON DELETE CASCADE,
-    squadra_b_id       int NOT NULL REFERENCES fanta_torneo.squadre(id) ON DELETE CASCADE,
-    vinte_a            int,
-    vinte_b            int,
-    data_programmata   timestamptz,
-    stato              text NOT NULL DEFAULT 'programmato' CHECK (stato IN ('programmato','giocato','rinviato')),
-    note               text,
-    aggiornato_il      timestamptz NOT NULL DEFAULT now(),
-    CHECK (squadra_a_id <> squadra_b_id)
+-- Ordine con cui i capitani chiamano i giocatori all'asta (0 = ordine non ancora assegnato)
+CREATE TABLE IF NOT EXISTS fanta_torneo.asta_ordine_capitani (
+    id_utente  text PRIMARY KEY REFERENCES fanta_torneo.utenti_discord (discord_id),
+    ordine     int NOT NULL DEFAULT 0 CHECK (ordine >= 0)
+);
+
+-- Giocatori acquistati all'asta: a quale squadra, per quanti crediti e quando (un giocatore si acquista una volta sola)
+CREATE TABLE IF NOT EXISTS fanta_torneo.asta_giocatori_acquistati (
+    id              serial PRIMARY KEY,
+    id_squadra      int  NOT NULL REFERENCES fanta_torneo.squadre (id),
+    id_iscritto     text NOT NULL UNIQUE REFERENCES fanta_torneo.utenti_iscritti (id_discord),
+    costo_acquisto  int  NOT NULL CHECK (costo_acquisto >= 0),
+    data_acquisto   timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_disp_data ON fanta_torneo.disponibilita (data);
 CREATE INDEX IF NOT EXISTS idx_ticket_stato ON fanta_torneo.ticket (stato, creato_il DESC);
-CREATE INDEX IF NOT EXISTS idx_asta_offerte_iscritto ON fanta_torneo.asta_offerte (iscritto_id, id DESC);
-CREATE INDEX IF NOT EXISTS idx_incontri_fase ON fanta_torneo.torneo_incontri (fase, giornata, id);
 
 -- =====================================================================
 -- 3. DATI DI ESEMPIO (solo se il DB è vuoto)
@@ -238,20 +235,142 @@ VALUES
     (900001, 100006, 6, 'GiocatoreC2', 0, 'Mongols',  1062, -12, 1050)
 ON CONFLICT (id_game, aoe2_id) DO NOTHING;
 
-INSERT INTO fanta_torneo.squadre (nome, capitano_nome, berlu_iniziali, berlu_residui, ordine_chiamata)
-VALUES
-    ('Team Verde (Demo)', 'Capitano 1', 401, 401, 1),
-    ('Team Rosso (Demo)', 'Capitano 2', 401, 401, 2)
-ON CONFLICT (nome) DO NOTHING;
+-- Anagrafica delle civiltà (id del gioco, nome, nome del file dell'avatar e descrizione)
+CREATE TABLE IF NOT EXISTS fanta_torneo.civilta (
+    id      int PRIMARY KEY,
+    nome    text NOT NULL,
+    avatar  text NOT NULL,
+    descrizione text NOT NULL
+);
+-- per chi aveva già creato la tabella senza descrizione
+ALTER TABLE fanta_torneo.civilta ADD COLUMN IF NOT EXISTS descrizione text;
+UPDATE fanta_torneo.civilta SET descrizione = nome WHERE descrizione IS NULL;
+ALTER TABLE fanta_torneo.civilta ALTER COLUMN descrizione SET NOT NULL;
 
-INSERT INTO fanta_torneo.iscritti (player_id, nick, fascia, seeding, prezzo_base, stato)
-VALUES
-    (1, 'GiocatoreA1', 'A', 1, 1, 'approvato'),
-    (2, 'GiocatoreA2', 'A', 2, 1, 'approvato'),
-    (3, 'GiocatoreB1', 'B', 3, 1, 'approvato'),
-    (4, 'GiocatoreB2', 'B', 4, 1, 'approvato'),
-    (5, 'GiocatoreC1', 'C', 5, 1, 'approvato'),
-    (6, 'GiocatoreC2', 'C', 6, 1, 'approvato')
-ON CONFLICT (player_id) DO NOTHING;
+-- per ora la descrizione è uguale al nome
+INSERT INTO fanta_torneo.civilta (id, nome, avatar, descrizione)
+SELECT id, nome, avatar, nome FROM (VALUES
+    (0, 'Armenians', 'Armenians'), (1, 'Aztec', 'Aztec'), (2, 'Bengalis', 'Bengalis'),
+    (3, 'Berbers', 'Berbers'), (4, 'Bohemians', 'Bohemians'), (5, 'Britons', 'Britons'),
+    (6, 'Bulgarians', 'Bulgarians'), (7, 'Burgundians', 'Burgundians'), (8, 'Burmese', 'Burmese'),
+    (9, 'Byzantines', 'Byzantines'), (10, 'Celts', 'Celts'), (11, 'Chinese', 'Chinese'),
+    (12, 'Cumans', 'Cumans'), (13, 'Dravidians', 'Dravidians'), (14, 'Ethiopians', 'Ethiopians'),
+    (15, 'Franks', 'Franks'), (16, 'Georgians', 'Georgians'), (17, 'Goths', 'Goths'),
+    (18, 'Gurjaras', 'Gurjaras'), (19, 'Huns', 'Huns'), (20, 'Incas', 'Incas'),
+    (21, 'Indians', 'Indians'), (22, 'Italians', 'Italians'), (23, 'Japanese', 'Japanese'),
+    (24, 'Khmer', 'Khmer'), (25, 'Koreans', 'Koreans'), (26, 'Lithuanians', 'Lithuanians'),
+    (27, 'Magyars', 'Magyars'), (28, 'Malay', 'Malay'), (29, 'Malians', 'Malians'),
+    (30, 'Mayans', 'Mayans'), (31, 'Mongols', 'Mongols'), (32, 'Persians', 'Persians'),
+    (33, 'Poles', 'Poles'), (34, 'Portuguese', 'Portuguese'), (35, 'Romans', 'Romans'),
+    (36, 'Saracens', 'Saracens'), (37, 'Sicilians', 'Sicilians'), (38, 'Slavs', 'Slavs'),
+    (39, 'Spanish', 'Spanish'), (40, 'Tatars', 'Tatars'), (41, 'Teutons', 'Teutons'),
+    (42, 'Turks', 'Turks'), (43, 'Vietnamese', 'Vietnamese'), (44, 'Vikings', 'Vikings'),
+    (48, 'Shu', 'Shu'), (49, 'Wu', 'Wu'), (50, 'Wei', 'Wei'),
+    (51, 'Jurchens', 'Jurchens'), (52, 'Khitans', 'Khitans'),
+    (58, 'Muisca', 'Muisca'), (59, 'Mapuche', 'Mapuche'), (60, 'Tupi', 'Tupi'),
+    (61, 'Saxons', 'Saxons'), (62, 'Varangians', 'Varangians'), (63, 'Danes', 'Danes')
+) AS v(id, nome, avatar)
+ON CONFLICT (id) DO NOTHING;
+
+-- =====================================================================
+-- 3. LOGIN SIMULATO (solo sviluppo)
+-- =====================================================================
+
+-- Utenti per il login simulato (SOLO sviluppo: password in chiaro, in produzione questa tabella non esiste)
+CREATE TABLE IF NOT EXISTS fanta_torneo.utenti_dev (
+    id          serial PRIMARY KEY,
+    id_discord  text NOT NULL UNIQUE,
+    username    text NOT NULL UNIQUE,
+    password    text NOT NULL
+);
+
+-- 50 utenti di test: Giocatore_1 ... Giocatore_50, password "password" (gli id_discord sono finti)
+INSERT INTO fanta_torneo.utenti_dev (id_discord, username, password)
+SELECT (200000000000000000 + n)::text, 'Giocatore_' || n, 'password'
+FROM generate_series(1, 50) AS n
+ON CONFLICT (username) DO NOTHING;
+
+-- Prima gli stessi 50 utenti in utenti_discord (la tabella principale degli utenti, riempita in produzione dal login)
+INSERT INTO fanta_torneo.utenti_discord (discord_id, discord_nome)
+SELECT id_discord, username FROM fanta_torneo.utenti_dev
+ON CONFLICT (discord_id) DO NOTHING;
+
+-- Impostazioni di ogni utente (i ruoli stanno in utenti_ruoli)
+CREATE TABLE IF NOT EXISTS fanta_torneo.utenti_info (
+    id_discord  text PRIMARY KEY REFERENCES fanta_torneo.utenti_discord (discord_id) ON DELETE CASCADE,
+    audio_attivo  boolean NOT NULL DEFAULT TRUE,  -- impostazione: audio di sottofondo
+    layout_scuro  boolean NOT NULL DEFAULT TRUE,  -- impostazione: tema scuro (FALSE = chiaro)
+    cursore       varchar(20) NOT NULL DEFAULT 'accattivante'  -- impostazione: 'accattivante' o 'classico'
+        CONSTRAINT utenti_info_cursore_check CHECK (cursore IN ('accattivante', 'classico')),
+    animazione_iniziale boolean NOT NULL DEFAULT TRUE  -- impostazione: elmo della home animato (FALSE = fermo)
+);
+-- per chi aveva già creato la tabella senza le impostazioni
+ALTER TABLE fanta_torneo.utenti_info
+    ADD COLUMN IF NOT EXISTS audio_attivo boolean NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS layout_scuro boolean NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS cursore varchar(20) NOT NULL DEFAULT 'accattivante'
+        CONSTRAINT utenti_info_cursore_check CHECK (cursore IN ('accattivante', 'classico')),
+    ADD COLUMN IF NOT EXISTS animazione_iniziale boolean NOT NULL DEFAULT TRUE;
+
+INSERT INTO fanta_torneo.utenti_info (id_discord)
+SELECT id_discord FROM fanta_torneo.utenti_dev
+ON CONFLICT (id_discord) DO NOTHING;
+
+-- Ruoli possibili (anagrafica). "Nessun ruolo" = nessuna riga in utenti_ruoli per quell'utente.
+CREATE TABLE IF NOT EXISTS fanta_torneo.ruoli (
+    id_ruolo     serial PRIMARY KEY,
+    chiave_ruolo text NOT NULL UNIQUE,  -- valore tecnico: admin, streamer, capitano, giocatore, ...
+    nome         text NOT NULL          -- nome in chiaro: Admin, Streamer, Capitano, Giocatore, ...
+);
+
+INSERT INTO fanta_torneo.ruoli (chiave_ruolo, nome)
+VALUES ('admin', 'Admin'), ('streamer', 'Streamer'), ('capitano', 'Capitano'), ('giocatore', 'Giocatore'), ('utente', 'Utente')
+ON CONFLICT (chiave_ruolo) DO NOTHING;
+
+-- Ruoli assegnati a ogni utente: un utente può averne più di uno
+CREATE TABLE IF NOT EXISTS fanta_torneo.utenti_ruoli (
+    id_utente         text NOT NULL REFERENCES fanta_torneo.utenti_info (id_discord) ON DELETE CASCADE,
+    id_ruolo          int  NOT NULL REFERENCES fanta_torneo.ruoli (id_ruolo),
+    data_assegnazione timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (id_utente, id_ruolo)
+);
+
+-- data_assegnazione = momento dell'inserimento o dell'ultima modifica del record
+CREATE OR REPLACE FUNCTION fanta_torneo.utenti_ruoli_aggiorna_data() RETURNS trigger AS $$
+BEGIN
+    NEW.data_assegnazione := now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS utenti_ruoli_data ON fanta_torneo.utenti_ruoli;
+CREATE TRIGGER utenti_ruoli_data BEFORE UPDATE ON fanta_torneo.utenti_ruoli
+    FOR EACH ROW EXECUTE FUNCTION fanta_torneo.utenti_ruoli_aggiorna_data();
+
+-- Chi aveva ancora il vecchio ruolo singolo in utenti_info lo porta in utenti_ruoli ("nulla" = nessuna riga) e poi lo perde
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_schema = 'fanta_torneo' AND table_name = 'utenti_info' AND column_name = 'ruolo') THEN
+        INSERT INTO fanta_torneo.utenti_ruoli (id_utente, id_ruolo)
+        SELECT i.id_discord, r.id_ruolo
+        FROM fanta_torneo.utenti_info i
+        JOIN fanta_torneo.ruoli r ON r.chiave_ruolo = i.ruolo
+        ON CONFLICT (id_utente, id_ruolo) DO NOTHING;
+        ALTER TABLE fanta_torneo.utenti_info DROP COLUMN ruolo;
+    END IF;
+END $$;
+
+-- Ruoli degli utenti di prova: Giocatore_1 admin; 2-5 capitani; 6-40 giocatori; 41-50 nessun ruolo
+INSERT INTO fanta_torneo.utenti_ruoli (id_utente, id_ruolo)
+SELECT u.id_discord, r.id_ruolo
+FROM fanta_torneo.utenti_dev u
+CROSS JOIN LATERAL (SELECT substring(u.username FROM 'Giocatore_(\d+)')::int AS n) x
+JOIN fanta_torneo.ruoli r ON r.chiave_ruolo = CASE WHEN x.n = 1 THEN 'admin'
+                                                    WHEN x.n BETWEEN 2 AND 5 THEN 'capitano'
+                                                    WHEN x.n BETWEEN 6 AND 40 THEN 'giocatore' END
+WHERE x.n IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM fanta_torneo.utenti_ruoli ur WHERE ur.id_utente = u.id_discord)
+ON CONFLICT (id_utente, id_ruolo) DO NOTHING;
 
 COMMIT;

@@ -1,117 +1,80 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { api, percento } from '../api.js'
+// Tutte le civiltà dell'anagrafica (tabella fanta_torneo.civilta) in ordine alfabetico, ognuna con il suo stemma.
+// Il nome in inglese è già scritto nello stemma: sotto si vede solo la descrizione.
+// Lo stemma è il file client/public/civilta/<avatar>.png, dove <avatar> è il valore della colonna "avatar".
+import { ref, reactive, onMounted } from 'vue'
+import { api } from '../api.js'
 import StatoDati from '../componenti/StatoDati.vue'
 
-const route = useRoute()
-const router = useRouter()
-
-const periodi = [
-  { valore: null, titolo: 'Sempre' },
-  { valore: 365, titolo: '1 anno' },
-  { valore: 90, titolo: '90 giorni' },
-]
-const periodo = computed(() => (['365', '90'].includes(route.query.giorni) ? Number(route.query.giorni) : null))
-const ordine = computed(() => (route.query.ordine === 'winrate' ? 'winrate' : 'partite'))
-
-function imposta(cambi) {
-  const q = { ...route.query, ...cambi }
-  for (const k of Object.keys(q)) if (q[k] == null) delete q[k]
-  router.replace({ query: q })
-}
-
-const civ = ref([])
+const civilta = ref([])
 const caricamento = ref(true)
 const errore = ref('')
+const senzaStemma = reactive(new Set()) // avatar per cui il file non si trova
 
 async function carica() {
   caricamento.value = true
   errore.value = ''
   try {
-    civ.value = await api(periodo.value ? `civ?giorni=${periodo.value}` : 'civ')
+    const righe = await api('civilta')
+    civilta.value = righe.sort((a, b) => a.nome.localeCompare(b.nome, 'it', { sensitivity: 'base' }))
   } catch (e) {
     errore.value = e.message
   } finally {
     caricamento.value = false
   }
 }
-watch(periodo, carica, { immediate: true })
-
-const totale = computed(() => civ.value.reduce((a, c) => a + c.partite, 0))
-const righe = computed(() =>
-  civ.value
-    .map((c) => ({
-      ...c,
-      winrate: c.partite ? (c.vittorie / c.partite) * 100 : 0,
-      pick: totale.value ? (c.partite / totale.value) * 100 : 0,
-    }))
-    .sort((a, b) => b[ordine.value] - a[ordine.value] || b.partite - a.partite),
-)
-const pick = (n) => `${n.toLocaleString('it-IT', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`
+onMounted(carica)
 </script>
 
 <template>
   <div class="testa-pagina">
     <h1>Civiltà</h1>
-    <p>Quante volte esce ogni civiltà nei TG Dito validi e quanto vince. Con poche partite il winrate dice poco.</p>
-  </div>
-
-  <div class="strumenti">
-    <div class="scelta" role="group" aria-label="Periodo">
-      <button
-        v-for="p in periodi"
-        :key="p.titolo"
-        type="button"
-        :aria-pressed="periodo === p.valore"
-        @click="imposta({ giorni: p.valore ? String(p.valore) : null })"
-      >
-        {{ p.titolo }}
-      </button>
-    </div>
+    <p>Tutte le civiltà di Age of Empires II, in ordine alfabetico.</p>
   </div>
 
   <StatoDati
     :caricamento="caricamento"
     :errore="errore"
-    :vuoto="!righe.length"
-    :righe="12"
-    testo-vuoto="In questo periodo non ci sono Diti validi."
+    :vuoto="!civilta.length"
+    :righe="8"
+    testo-vuoto="Non c'è ancora nessuna civiltà."
     @riprova="carica"
   >
-    <div class="tabella">
-      <table>
-        <caption class="visually-hidden">Civiltà per numero di partite e vittorie</caption>
-        <thead>
-          <tr>
-            <th scope="col">Civiltà</th>
-            <th scope="col" class="num" :aria-sort="ordine === 'partite' ? 'descending' : 'none'">
-              <button type="button" :aria-pressed="ordine === 'partite'" @click="imposta({ ordine: null })">
-                Partite<span v-if="ordine === 'partite'" aria-hidden="true">↓</span>
-              </button>
-            </th>
-            <th scope="col" class="num nascondi-stretto">Uscita</th>
-            <th scope="col" :aria-sort="ordine === 'winrate' ? 'descending' : 'none'">
-              <button type="button" :aria-pressed="ordine === 'winrate'" @click="imposta({ ordine: 'winrate' })">
-                Vittorie<span v-if="ordine === 'winrate'" aria-hidden="true">↓</span>
-              </button>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="c in righe" :key="c.civ">
-            <td class="forte">{{ c.civ }}</td>
-            <td class="num">{{ c.partite }}</td>
-            <td class="num muto nascondi-stretto">{{ pick(c.pick) }}</td>
-            <td>
-              <div class="barretta">
-                <div class="barretta__traccia"><span :style="{ transform: `scaleX(${c.winrate / 100})` }" /></div>
-                <span class="num">{{ percento(c.winrate) }}</span>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <ul class="civ">
+      <li v-for="c in civilta" :key="c.id" class="civ__scheda">
+        <span class="civ__stemma">
+          <span v-if="senzaStemma.has(c.avatar)" class="civ__iniziale" aria-hidden="true">{{ c.nome.charAt(0) }}</span>
+          <img
+            v-else
+            :src="`/civilta/${encodeURIComponent(c.avatar)}.png`"
+            :alt="`Stemma: ${c.nome}`"
+            width="96"
+            height="96"
+            loading="lazy"
+            @error="senzaStemma.add(c.avatar)"
+          />
+        </span>
+        <span class="civ__descrizione">{{ c.descrizione || c.nome }}</span>
+      </li>
+    </ul>
   </StatoDati>
 </template>
+
+<style scoped>
+.civ {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: var(--space-md);
+  list-style: none; margin: 0; padding: 0;
+}
+.civ__scheda {
+  display: grid; justify-items: center; align-content: start; gap: var(--space-xs); text-align: center;
+  padding: var(--space-md) var(--space-sm); background: var(--color-paper-2);
+  border: var(--rule-hair) solid var(--color-rule-2); border-radius: var(--radius-card);
+}
+.civ__stemma { display: grid; place-items: center; width: 96px; height: 96px; }
+.civ__stemma img { width: 96px; height: 96px; object-fit: contain; }
+.civ__iniziale {
+  display: grid; place-items: center; width: 96px; height: 96px; border-radius: 50%;
+  background: var(--color-paper-3); color: var(--color-muted); font-size: var(--text-3xl);
+}
+.civ__descrizione { color: var(--color-ink-2); overflow-wrap: anywhere; }
+</style>

@@ -2,32 +2,18 @@
 import { ref, computed, onMounted } from 'vue'
 import { api, apiPost, apiPatch, apiDelete, elo, data } from '../../api.js'
 import { sessione } from '../../sessione.js'
-import { usaAstaLive } from '../../astaLive.js'
 
-const scheda = ref('asta')
-const { dati: asta, connesso, secondiRimasti } = usaAstaLive()
+const scheda = ref('iscritti')
 
 const giocatori = ref([])
 const iscritti = ref([])
 const squadre = ref([])
 const utentiDiscord = ref([])
 const ticket = ref([])
-const incontri = ref([])
 
 const messaggio = ref(null)
 const errore = ref(null)
 const occupato = ref(false)
-
-// Regia Asta
-const iscrittoDaChiamare = ref('')
-const messaggioAsta = ref('')
-const durataTimer = ref(15)
-const squadraOffertaAdmin = ref('')
-const importoOffertaAdmin = ref('')
-
-// Nuovo incontro torneo
-const nuovoIncontro = ref({ fase: 'girone', giornata: 1, squadraAId: '', squadraBId: '' })
-const bozzeIncontri = ref({})
 
 // Nuovo iscritto
 const ricercaGiocatore = ref('')
@@ -45,10 +31,6 @@ const giocatoriFiltrati = computed(() => {
   return giocatori.value.filter((g) => g.nick.toLowerCase().includes(q)).slice(0, 8)
 })
 
-const squadraMigliore = computed(() =>
-  asta.value?.squadre?.find((s) => s.id === asta.value.squadraMiglioreId) || null
-)
-
 function avvisa(testo) {
   messaggio.value = testo
   setTimeout(() => { if (messaggio.value === testo) messaggio.value = null }, 3500)
@@ -57,31 +39,24 @@ function avvisa(testo) {
 async function caricaTutto() {
   errore.value = null
   try {
-    const [g, isc, sq, ud, tk, tab] = await Promise.all([
+    const [g, isc, sq, ud, tk] = await Promise.all([
       api('giocatori?tutti=true'),
       api('torneo/iscritti'),
       api('torneo/squadre'),
       api('admin/utenti-discord'),
       api('ticket?tutti=true'),
-      api('torneo/tabellone'),
     ])
     giocatori.value = g
     iscritti.value = isc
     squadre.value = sq
     utentiDiscord.value = ud
     ticket.value = tk
-    incontri.value = tab.incontri || []
     nuovaSquadra.value.ordineChiamata = sq.length + 1
     const m = {}
     for (const t of tk) {
       m[t.id] = { stato: t.stato, rispostaAdmin: t.rispostaAdmin || '' }
     }
     bozzeTicket.value = m
-    const mi = {}
-    for (const i of incontri.value) {
-      mi[i.id] = { vinteA: i.vinteA ?? '', vinteB: i.vinteB ?? '', stato: i.stato }
-    }
-    bozzeIncontri.value = mi
   } catch (e) {
     errore.value = e.message
   }
@@ -99,32 +74,6 @@ async function esegui(fn, okTesto) {
   } finally {
     occupato.value = false
   }
-}
-
-// --- Regia Asta ---
-const chiamaGiocatore = () => {
-  if (!iscrittoDaChiamare.value) return
-  esegui(() => apiPost('admin/asta/chiama', { iscrittoId: Number(iscrittoDaChiamare.value) }), 'Giocatore chiamato all\'asta.')
-}
-const impostaStatoAsta = (stato) =>
-  esegui(() => apiPost('admin/asta/stato', {
-    stato,
-    messaggio: messaggioAsta.value || null,
-    durataTimerSec: Number(durataTimer.value),
-  }), `Stato asta: ${stato}.`)
-const aggiudicaAsta = () =>
-  esegui(() => apiPost('admin/asta/aggiudica', {}), 'Giocatore aggiudicato!')
-const annullaOfferta = () =>
-  esegui(() => apiPost('admin/asta/annulla-offerta', {}), 'Ultima offerta annullata.')
-const offertaAdmin = () => {
-  if (!squadraOffertaAdmin.value || !importoOffertaAdmin.value) return
-  esegui(async () => {
-    await apiPost('asta/offerta', {
-      squadraId: Number(squadraOffertaAdmin.value),
-      importo: Number(importoOffertaAdmin.value),
-    })
-    importoOffertaAdmin.value = ''
-  }, 'Offerta registrata.')
 }
 
 // --- Iscritti ---
@@ -159,44 +108,6 @@ const impostaStatoIscritto = (id, stato) =>
 
 const svincolaIscritto = (id) =>
   esegui(() => apiPost(`admin/iscritti/${id}/svincola`, {}), 'Giocatore svincolato e Berlu rimborsati.')
-
-// --- Torneo (Gironi & Playoff) ---
-const generaGirone = () =>
-  esegui(() => apiPost('admin/torneo/genera-girone', {}), 'Calendario del girone generato!')
-
-const aggiungiIncontro = () => {
-  if (!nuovoIncontro.value.squadraAId || !nuovoIncontro.value.squadraBId) return
-  esegui(async () => {
-    await apiPost('admin/torneo/incontri', {
-      fase: nuovoIncontro.value.fase,
-      giornata: Number(nuovoIncontro.value.giornata) || 1,
-      squadraAId: Number(nuovoIncontro.value.squadraAId),
-      squadraBId: Number(nuovoIncontro.value.squadraBId),
-      stato: 'programmato',
-    })
-    nuovoIncontro.value.squadraAId = ''
-    nuovoIncontro.value.squadraBId = ''
-  }, 'Incontro aggiunto.')
-}
-
-const salvaRisultato = (inc) => {
-  const b = bozzeIncontri.value[inc.id]
-  if (!b) return
-  esegui(() => apiPost('admin/torneo/incontri', {
-    id: inc.id,
-    fase: inc.fase,
-    giornata: inc.giornata,
-    girone: inc.girone,
-    squadraAId: inc.squadraAId,
-    squadraBId: inc.squadraBId,
-    vinteA: b.vinteA === '' ? null : Number(b.vinteA),
-    vinteB: b.vinteB === '' ? null : Number(b.vinteB),
-    stato: b.stato,
-  }), 'Risultato salvato.')
-}
-
-const eliminaIncontro = (id) =>
-  esegui(() => apiDelete(`admin/torneo/incontri/${id}`), 'Incontro eliminato.')
 
 // --- Squadre ---
 const salvaSquadra = () =>
@@ -238,17 +149,12 @@ onMounted(caricaTutto)
       <div>
         <h1>Admin</h1>
         <p class="muto">
-          Regia dell'asta, iscritti, squadre, collegamenti Discord e ticket.
-          <span class="live-dot" :class="{ 'live-dot--on': connesso }">
-            {{ connesso ? 'Live connesso' : 'Riconnessione...' }}
-          </span>
+          Iscritti, squadre, collegamenti Discord e ticket.
         </p>
       </div>
       <div class="scelta" role="tablist">
-        <button type="button" :aria-pressed="scheda === 'asta'" @click="scheda = 'asta'">Regia asta</button>
         <button type="button" :aria-pressed="scheda === 'iscritti'" @click="scheda = 'iscritti'">Iscritti ({{ iscritti.length }})</button>
         <button type="button" :aria-pressed="scheda === 'squadre'" @click="scheda = 'squadre'">Squadre ({{ squadre.length }})</button>
-        <button type="button" :aria-pressed="scheda === 'torneo'" @click="scheda = 'torneo'">Torneo ({{ incontri.length }})</button>
         <button type="button" :aria-pressed="scheda === 'utenti'" @click="scheda = 'utenti'">Discord</button>
         <button type="button" :aria-pressed="scheda === 'ticket'" @click="scheda = 'ticket'">
           Ticket ({{ ticket.filter((t) => t.stato === 'aperto').length }})
@@ -259,108 +165,8 @@ onMounted(caricaTutto)
     <p v-if="messaggio" class="avviso-riga avviso-riga--ok" role="status">{{ messaggio }}</p>
     <p v-if="errore" class="avviso-riga avviso-riga--err" role="alert">{{ errore }}</p>
 
-    <!-- ==================== REGIA ASTA ==================== -->
-    <section v-if="scheda === 'asta'" class="blocco-pannello due">
-      <div class="riquadro angoli">
-        <div class="riga-spazio">
-          <h2>Stato asta</h2>
-          <span class="badge" :class="`badge--asta-${asta?.stato || 'attesa'}`">{{ asta?.stato || 'attesa' }}</span>
-        </div>
-
-        <div v-if="asta?.giocatore" class="asta-scheda">
-          <span class="badge">Fascia {{ asta.giocatore.fascia }}</span>
-          <h3 class="asta-nick">{{ asta.giocatore.nick }}</h3>
-          <p class="piccolo muto">
-            Offerta: <strong class="vinto">{{ asta.offertaAttuale }} Berlu</strong>
-            <template v-if="squadraMigliore"> · {{ squadraMigliore.nome }}</template>
-            <template v-if="secondiRimasti !== null"> · <strong :class="{ perso: secondiRimasti <= 5 }">{{ secondiRimasti }}s</strong></template>
-          </p>
-        </div>
-        <p v-else class="piccolo muto">Nessun giocatore chiamato. Scegli un iscritto disponibile qui sotto.</p>
-
-        <div class="modulo" style="margin-top: var(--space-md)">
-          <label class="campo">
-            <span>Chiama un giocatore all'asta</span>
-            <div class="azioni-inline">
-              <select v-model="iscrittoDaChiamare" class="cerca">
-                <option value="">Seleziona giocatore disponibile...</option>
-                <option v-for="i in (asta?.disponibili || [])" :key="i.id" :value="i.id">
-                  [{{ i.fascia }}] {{ i.nick }} (seed {{ i.seeding ?? '-' }}, 1v1 {{ elo(i.elo1v1) }})
-                </option>
-              </select>
-              <button type="button" class="btn" :disabled="occupato || !iscrittoDaChiamare" @click="chiamaGiocatore">Chiama</button>
-            </div>
-          </label>
-
-          <div class="azioni-inline">
-            <button type="button" class="btn" :disabled="occupato || !asta?.squadraMiglioreId" @click="aggiudicaAsta">
-              Aggiudica ({{ asta?.offertaAttuale ?? 0 }})
-            </button>
-            <button type="button" class="btn btn--linea" :disabled="occupato || !asta?.offerte?.length" @click="annullaOfferta">
-              Annulla ultima offerta
-            </button>
-          </div>
-
-          <label class="campo">
-            <span>Timer countdown dopo ogni offerta</span>
-            <select v-model.number="durataTimer" class="cerca select-compatta">
-              <option :value="0">Spento</option>
-              <option :value="10">10 secondi</option>
-              <option :value="15">15 secondi</option>
-              <option :value="20">20 secondi</option>
-              <option :value="30">30 secondi</option>
-            </select>
-          </label>
-
-          <label class="campo">
-            <span>Messaggio per l'overlay OBS (es. Pausa 5 minuti)</span>
-            <input v-model="messaggioAsta" type="text" class="cerca" placeholder="Opzionale: testo mostrato su OBS" />
-          </label>
-
-          <div class="azioni-inline">
-            <button type="button" class="btn btn--linea" :disabled="occupato" @click="impostaStatoAsta('in_corso')">Riprendi</button>
-            <button type="button" class="btn btn--linea" :disabled="occupato" @click="impostaStatoAsta('pausa')">Metti in pausa</button>
-            <button type="button" class="btn btn--linea" :disabled="occupato" @click="impostaStatoAsta('attesa')">Attesa</button>
-            <button type="button" class="btn btn--linea" :disabled="occupato" @click="impostaStatoAsta('chiusa')">Chiudi asta</button>
-            <a class="btn btn--linea" href="/api/torneo/export/rose.csv" download>Esporta CSV</a>
-          </div>
-        </div>
-      </div>
-
-      <div class="riquadro angoli">
-        <h2>Registra offerta per una squadra</h2>
-        <p class="piccolo muto">Utile se un capitano offre a voce su Discord invece che dal pannello.</p>
-        <form class="modulo" style="margin-top: var(--space-sm)" @submit.prevent="offertaAdmin">
-          <label class="campo">
-            <span>Squadra</span>
-            <select v-model="squadraOffertaAdmin" class="cerca">
-              <option value="">Scegli squadra...</option>
-              <option v-for="s in (asta?.squadre || [])" :key="s.id" :value="s.id">
-                {{ s.nome }} ({{ s.berluResidui }} Berlu · {{ s.nGiocatori }}/{{ asta?.maxRosa || 10 }})
-              </option>
-            </select>
-          </label>
-          <label class="campo">
-            <span>Importo (Berlu)</span>
-            <input v-model="importoOffertaAdmin" type="number" min="1" class="cerca" placeholder="Es. 25" />
-          </label>
-          <button type="submit" class="btn" :disabled="occupato || asta?.stato !== 'in_corso'">Registra offerta</button>
-        </form>
-
-        <div v-if="asta?.offerte?.length" class="sezione">
-          <h3>Offerte su {{ asta.giocatore?.nick }}</h3>
-          <ul class="offerte-log">
-            <li v-for="o in asta.offerte" :key="o.id">
-              <span><strong>{{ o.squadraNome }}</strong> <span class="muto piccolo">({{ o.creataDa }})</span></span>
-              <span class="num vinto">{{ o.importo }} Berlu</span>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
     <!-- ==================== ISCRITTI & SEEDING ==================== -->
-    <section v-else-if="scheda === 'iscritti'" class="blocco-pannello">
+    <section v-if="scheda === 'iscritti'" class="blocco-pannello">
       <div class="riquadro angoli">
         <div class="riga-spazio">
           <h2>Aggiungi iscritto</h2>
@@ -475,77 +281,6 @@ onMounted(caricaTutto)
                 <td class="num forte">{{ s.berluResidui }} / {{ s.berluIniziali }}</td>
                 <td class="num">
                   <button type="button" class="btn btn--linea btn--sm" :disabled="occupato" @click="eliminaSquadra(s.id)">Elimina</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- ==================== TORNEO (GIRONI & PLAYOFF) ==================== -->
-    <section v-else-if="scheda === 'torneo'" class="blocco-pannello">
-      <div class="riquadro angoli">
-        <div class="riga-spazio">
-          <h2>Gironi e playoff</h2>
-          <div class="azioni-inline">
-            <button type="button" class="btn btn--linea" :disabled="occupato || squadre.length < 2" @click="generaGirone">
-              Genera girone automatico
-            </button>
-            <RouterLink to="/torneo" class="btn btn--linea">Apri pagina Torneo</RouterLink>
-          </div>
-        </div>
-
-        <form class="form-riga" style="margin-block: var(--space-md)" @submit.prevent="aggiungiIncontro">
-          <select v-model="nuovoIncontro.fase" class="cerca select-compatta">
-            <option value="girone">Girone</option>
-            <option value="quarti">Quarti</option>
-            <option value="semifinale">Semifinale</option>
-            <option value="finale">Finale</option>
-          </select>
-          <input v-model.number="nuovoIncontro.giornata" type="number" min="1" class="cerca select-compatta" placeholder="Giornata" />
-          <select v-model="nuovoIncontro.squadraAId" class="cerca">
-            <option value="">Squadra A...</option>
-            <option v-for="s in squadre" :key="s.id" :value="s.id">{{ s.nome }}</option>
-          </select>
-          <select v-model="nuovoIncontro.squadraBId" class="cerca">
-            <option value="">Squadra B...</option>
-            <option v-for="s in squadre" :key="s.id" :value="s.id">{{ s.nome }}</option>
-          </select>
-          <button type="submit" class="btn" :disabled="occupato">Aggiungi incontro</button>
-        </form>
-
-        <div class="tabella">
-          <p v-if="!incontri.length" class="muto piccolo">Nessun incontro creato. Crea prima le squadre, poi clicca «Genera girone automatico».</p>
-          <table v-else>
-            <thead>
-              <tr>
-                <th>Fase</th>
-                <th class="num">G.</th>
-                <th>Squadra A</th>
-                <th>Risultato</th>
-                <th>Squadra B</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="inc in incontri" :key="inc.id">
-                <td><span class="badge">{{ inc.fase }}</span></td>
-                <td class="num pos">{{ inc.giornata }}</td>
-                <td class="forte">{{ inc.squadraANome }}</td>
-                <td>
-                  <div class="azioni-inline">
-                    <input v-model="bozzeIncontri[inc.id].vinteA" type="number" min="0" max="9" class="cerca score-input" placeholder="-" />
-                    <span class="muto">–</span>
-                    <input v-model="bozzeIncontri[inc.id].vinteB" type="number" min="0" max="9" class="cerca score-input" placeholder="-" />
-                  </div>
-                </td>
-                <td class="forte">{{ inc.squadraBNome }}</td>
-                <td class="num">
-                  <div class="azioni-inline" style="justify-content: flex-end">
-                    <button type="button" class="btn btn--sm" :disabled="occupato" @click="salvaRisultato(inc)">Salva</button>
-                    <button type="button" class="btn btn--linea btn--sm" :disabled="occupato" @click="eliminaIncontro(inc.id)">Elimina</button>
-                  </div>
                 </td>
               </tr>
             </tbody>

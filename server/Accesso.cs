@@ -1,7 +1,7 @@
 // Login con Discord. Dopo il consenso, con il token dell'utente (non quello del bot) si leggono:
 //  - i suoi server (scope "guilds"): se è amministratore del server AoE Italia diventa admin;
 //  - i suoi ruoli nel server (scope "guilds.members.read"): capitano, iscritto, streamer secondo la configurazione.
-// Configurazione da variabili d'ambiente (mai nel repo):
+// Configurazione da variabili d'ambiente (mai nel repo; in sviluppo anche da appsettings.Development.json):
 //   DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET  app del portale sviluppatori Discord
 //   PUBLIC_URL                                indirizzo pubblico, es. https://fantaaoe.tail17199a.ts.net
 //   DISCORD_GUILD_ID                          ID del server; se manca si cerca per nome ("Age of Empires - Italia")
@@ -33,19 +33,20 @@ public sealed class ConfigAccesso
     static HashSet<string> Lista(string? v) =>
         (v ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet();
 
-    public static ConfigAccesso DaAmbiente() => new()
+    // Legge da IConfiguration: le variabili d'ambiente (produzione) e, in sviluppo, appsettings.Development.json.
+    public static ConfigAccesso DaAmbiente(IConfiguration c) => new()
     {
-        ClientId = Environment.GetEnvironmentVariable("DISCORD_CLIENT_ID"),
-        ClientSecret = Environment.GetEnvironmentVariable("DISCORD_CLIENT_SECRET"),
-        IndirizzoPubblico = Environment.GetEnvironmentVariable("PUBLIC_URL"),
-        GuildId = Environment.GetEnvironmentVariable("DISCORD_GUILD_ID"),
-        NomeGuild = Environment.GetEnvironmentVariable("DISCORD_GUILD_NOME") ?? "Age of Empires - Italia",
+        ClientId = c["DISCORD_CLIENT_ID"],
+        ClientSecret = c["DISCORD_CLIENT_SECRET"],
+        IndirizzoPubblico = c["PUBLIC_URL"],
+        GuildId = c["DISCORD_GUILD_ID"],
+        NomeGuild = c["DISCORD_GUILD_NOME"] ?? "Age of Empires - Italia",
         // ruolo "Dito" del server (lo stesso che il bot tagga per i TG Dito)
-        RuoliIscritto = Lista(Environment.GetEnvironmentVariable("RUOLI_ISCRITTO") ?? "1436121682614947980"),
-        RuoliCapitano = Lista(Environment.GetEnvironmentVariable("RUOLI_CAPITANO")),
-        RuoliStreamer = Lista(Environment.GetEnvironmentVariable("RUOLI_STREAMER")),
-        RuoliAdmin = Lista(Environment.GetEnvironmentVariable("RUOLI_ADMIN")),
-        AdminUtenti = Lista(Environment.GetEnvironmentVariable("ADMIN_UTENTI")),
+        RuoliIscritto = Lista(c["RUOLI_ISCRITTO"] ?? "1436121682614947980"),
+        RuoliCapitano = Lista(c["RUOLI_CAPITANO"]),
+        RuoliStreamer = Lista(c["RUOLI_STREAMER"]),
+        RuoliAdmin = Lista(c["RUOLI_ADMIN"]),
+        AdminUtenti = Lista(c["ADMIN_UTENTI"]),
     };
 }
 
@@ -131,7 +132,21 @@ public static class Accesso
         if (ruoliDiscord.Any(cfg.RuoliCapitano.Contains)) ruoli.Add(Capitano);
         if (ruoliDiscord.Any(cfg.RuoliStreamer.Contains)) ruoli.Add(Streamer);
         if (ruoliDiscord.Any(cfg.RuoliIscritto.Contains)) ruoli.Add(Iscritto);
-        foreach (var r in ruoli) id.AddClaim(new Claim(ClaimTypes.Role, r));
+
+        // i ruoli veri stanno nel database (utenti_ruoli): un claim per ogni ruolo dell'utente.
+        // Se il database non risponde si usano quelli ricavati da Discord, così il login non si blocca.
+        IEnumerable<string> ruoliFinali = ruoli;
+        var db = ctx.HttpContext.RequestServices.GetService<Npgsql.NpgsqlDataSource>();
+        if (db is not null && discordId != "")
+        {
+            try
+            {
+                ruoliFinali = await TorneoUtil.RegistraEAssegna(db, discordId, id.FindFirst("nome")?.Value ?? "Utente",
+                    id.FindFirst("avatar")?.Value, ruoli.ToList());
+            }
+            catch { /* resta il fallback */ }
+        }
+        foreach (var r in ruoliFinali) id.AddClaim(new Claim(ClaimTypes.Role, r));
     }
 
     // Solo percorsi interni come ritorno dopo il login (niente redirect verso altri siti).

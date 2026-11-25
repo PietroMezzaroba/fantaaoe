@@ -2,12 +2,11 @@
 import { computed, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
 import { trovaRuolo } from '../ruoli.js'
-import { sessione, puoEntrare, linkAccesso } from '../sessione.js'
+import { sessione, puoEntrare, linkAccesso, accedi } from '../sessione.js'
 
 import PannelloGiocatore from '../componenti/pannelli/PannelloGiocatore.vue'
 import PannelloCapitano from '../componenti/pannelli/PannelloCapitano.vue'
 import PannelloAdmin from '../componenti/pannelli/PannelloAdmin.vue'
-import PannelloStreamer from '../componenti/pannelli/PannelloStreamer.vue'
 
 const props = defineProps({ ruolo: { type: String, required: true } })
 const route = useRoute()
@@ -18,7 +17,6 @@ const componenti = {
   giocatore: PannelloGiocatore,
   capitano: PannelloCapitano,
   admin: PannelloAdmin,
-  streamer: PannelloStreamer,
 }
 const vistaAttiva = computed(() => componenti[props.ruolo] || null)
 
@@ -76,7 +74,7 @@ watchEffect(() => {
         <template v-else>
           <h2 id="titolo-accesso">Si entra con Discord</h2>
           <p>Il sito riconosce il tuo ruolo dal server Discord di AoE Italia, senza password nuove.</p>
-          <a v-if="sessione.loginAttivo" class="btn" :href="linkAccesso(route.fullPath)">Accedi con Discord</a>
+          <a v-if="sessione.loginAttivo || sessione.loginSviluppo" class="btn" :href="linkAccesso(route.fullPath)" @click="accedi">Accedi con Discord</a>
           <template v-else>
             <button type="button" class="btn" aria-disabled="true">Accedi con Discord</button>
             <p>Il login non è ancora attivo: manca l'ultimo collegamento con Discord.</p>

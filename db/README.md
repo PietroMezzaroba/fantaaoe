@@ -9,7 +9,7 @@ psql -d fantaaoe -f db/setup-locale.sql
 ```
 Lo script crea:
 - lo schema `fanta` (tabelle equivalenti alle viste di produzione dei TG Dito + 6 giocatori e 2 partite di esempio);
-- lo schema `fanta_torneo` (identico a produzione: `utenti_discord`, `squadre`, `iscritti`, `disponibilita`, `ticket`, `asta_stato`, `asta_offerte`, `torneo_incontri`).
+- lo schema `fanta_torneo` (identico a produzione: `utenti_discord`, `squadre`, `utenti_iscritti`, `disponibilita`, `ticket`, `asta_portafoglio_utente`, `asta_ordine_capitani`, `asta_giocatori_acquistati`, `configurazioni`).
 
 ## 2. Avvia il backend .NET puntando al DB locale
 Imposta la variabile d'ambiente `ConnectionStrings__Aoe` (o mettila in `server/appsettings.Development.json`, che non va committato):
@@ -20,10 +20,10 @@ dotnet run
 ```
 
 ## 3. Avvia il frontend Vue puntando al tuo backend locale
-Di default `npm run dev` punta al sito online. Per puntare al tuo `dotnet run` locale passa `API_URL`:
+Di default `npm run dev` punta al backend locale su `http://localhost:59173` (profilo `FantaAoe.Api`). Se il server non è avviato il client mostra la pagina "Server non raggiungibile" e riprova da solo. Per usare un altro backend (es. il sito online) passa `API_URL`:
 ```bash
 cd client
 npm install
-API_URL=http://localhost:5000 npm run dev
+API_URL=https://fantaaoe.tail17199a.ts.net npm run dev
 ```
-*(Su PowerShell Windows: `$env:API_URL="http://localhost:5000"; npm run dev` — sostituisci `5000` con la porta su cui ascolta il tuo `dotnet run`.)*
+*(Su PowerShell Windows: `$env:API_URL="https://fantaaoe.tail17199a.ts.net"; npm run dev`.)*

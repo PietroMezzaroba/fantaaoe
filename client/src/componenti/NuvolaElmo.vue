@@ -4,17 +4,27 @@
 // automatico gli scorre sopra. Il puntatore vero, se si muove, prende il posto di quello automatico.
 // Una scansione lo attraversa ogni sette secondi.
 // Si ferma fuori schermo, con la scheda nascosta, col bottone di pausa e con "riduci movimento".
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+// In pausa l'animazione si azzera: l'elmo resta fermo, dritto e ricomposto, senza nessun effetto.
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { suonoRilancio } from '../suoni.js'
 
 // centroX: dove sta l'elmo in larghezza (0..1); quota: quanta larghezza può occupare
-const props = defineProps({ centroX: { type: Number, default: 0.5 }, quota: { type: Number, default: 1 } })
+// animata: false = l'elmo resta sempre fermo (impostazione del profilo) e il pulsante di pausa non compare;
+// null = l'impostazione non è ancora arrivata, si aspetta prima di partire.
+const props = defineProps({
+  centroX: { type: Number, default: 0.5 },
+  quota: { type: Number, default: 1 },
+  animata: { default: true },
+})
 
 const tela = ref(null)
 const contenitore = ref(null)
 const paladinoEl = ref(null)
 const inPausa = ref(false)
 const pronto = ref(false)
+// ferma per scelta: in pausa col pulsante oppure animazione spenta nel profilo
+const congelata = computed(() => inPausa.value || props.animata === false)
+let datiPronti = false
 
 let ctx, dati, n, raf = 0, visibile = true, ridotto = false
 let larghezza = 0, altezza = 0, dpr = 1
@@ -30,7 +40,7 @@ let inizio = 0
 const carica = { attiva: false, inizio: 0, durata: 5.2, prossimo: 2.8, suonato: false }
 
 function lanciaCarica(ora) {
-  if (ridotto || inPausa.value) return
+  if (ridotto || congelata.value) return
   carica.attiva = true
   carica.inizio = ora
   carica.durata = Math.max(3.6, (larghezza + 220) / 135)
@@ -65,11 +75,16 @@ function disegna(ora) {
   ctx.clearRect(0, 0, larghezza, altezza)
 
   // vista: ondeggia da sola (ben visibile) + puntatore, smorzata
-  const fermo = ridotto || inPausa.value
+  const fermo = ridotto || congelata.value
   const ozioX = fermo ? 0 : Math.sin((t * Math.PI * 2) / 16) * 0.5
   const ozioY = fermo ? 0 : Math.sin((t * Math.PI * 2) / 11) * 0.12
-  vista.x += (mira.x + ozioX - vista.x) * 0.05
-  vista.y += (mira.y + ozioY - vista.y) * 0.05
+  if (congelata.value) {
+    // pausa: elmo dritto, subito, senza inseguire il puntatore
+    mira.x = mira.y = vista.x = vista.y = 0
+  } else {
+    vista.x += (mira.x + ozioX - vista.x) * 0.05
+    vista.y += (mira.y + ozioY - vista.y) * 0.05
+  }
   const cy = Math.cos(vista.x), sy = Math.sin(vista.x)
   const cx = Math.cos(vista.y), sx = Math.sin(vista.y)
 
@@ -78,7 +93,7 @@ function disegna(ora) {
   const ox = larghezza * props.centroX, oy = altezza * 0.5
 
   // ingresso: i punti arrivano sparsi e si ricompongono ruotando
-  const arrivo = ridotto ? 1 : Math.min(1, t / INGRESSO)
+  const arrivo = ridotto || congelata.value ? 1 : Math.min(1, t / INGRESSO)
   const raccolta = 1 - Math.pow(1 - arrivo, 4)
   const giro = (1 - raccolta) * 2.6
   const cg = Math.cos(giro), sg = Math.sin(giro)
@@ -95,7 +110,7 @@ function disegna(ora) {
   // scansione: un piano che attraversa l'elmo da sinistra a destra ogni 7 s
   const ciclo = ridotto ? 0.5 : (t % 7) / 7
   const piano = -820 + easeInOut(Math.min(1, ciclo / 0.7)) * 1640
-  const scansioneAttiva = ridotto || ciclo < 0.7
+  const scansioneAttiva = !congelata.value && (ridotto || ciclo < 0.7)
 
   // carica automatica del Paladino (prima volta subito dopo l'ingresso, poi ogni 14 s)
   if (!fermo && !carica.attiva && t >= carica.prossimo) {
@@ -154,7 +169,7 @@ function disegna(ora) {
     let syp = oy + y1 * scala * prosp
 
     // il puntatore scosta i punti vicini, che poi tornano a posto
-    if (puntatore.attivo && !ridotto) {
+    if (puntatore.attivo && !ridotto && !congelata.value) {
       const dx = sxp - puntatore.x, dy = syp - puntatore.y
       const d2 = dx * dx + dy * dy
       if (d2 < raggio2 && d2 > 0.01) {
@@ -199,14 +214,15 @@ function disegna(ora) {
   }
   ctx.globalAlpha = 1
 
-  if (!ridotto && !inPausa.value && visibile && !document.hidden) raf = requestAnimationFrame(disegna)
+  if (!ridotto && !congelata.value && visibile && !document.hidden) raf = requestAnimationFrame(disegna)
 }
 
 function avvia() {
-  if (!raf && dati) raf = requestAnimationFrame(disegna)
+  if (!raf && dati && pronto.value) raf = requestAnimationFrame(disegna)
 }
 
 function muovi(e) {
+  if (congelata.value) return // in pausa l'elmo non reagisce al puntatore
   const r = contenitore.value.getBoundingClientRect()
   const px = (e.clientX - r.left) / r.width - 0.5
   const py = (e.clientY - r.top) / r.height - 0.5
@@ -216,7 +232,7 @@ function muovi(e) {
   puntatore.y = e.clientY - r.top
   puntatore.attivo = true
   ultimoMovimento = performance.now()
-  if (inPausa.value || ridotto) avvia()
+  if (congelata.value || ridotto) avvia()
 }
 function esci() {
   mira.x = 0
@@ -224,10 +240,44 @@ function esci() {
   puntatore.attivo = false
 }
 
+// azzera quello che era in corso: carica del Paladino, passaggio automatico, punti spostati
+function azzera() {
+  carica.attiva = false
+  puntatore.attivo = false
+  spostX?.fill(0)
+  spostY?.fill(0)
+}
+
+// alla ripresa si riparte da fermo: niente carica subito, il puntatore automatico aspetta
+function riprendi() {
+  carica.prossimo = (performance.now() - inizio) / 1000 + 2.8
+  ultimoMovimento = performance.now()
+}
+
 function pausa() {
   inPausa.value = !inPausa.value
-  if (!inPausa.value) avvia()
+  if (inPausa.value) azzera()
+  else riprendi()
+  avvia()
 }
+
+// parte solo quando i punti sono caricati e si sa se l'animazione è accesa
+function partenza() {
+  if (!datiPronti || pronto.value || props.animata === null) return
+  pronto.value = true
+  inizio = performance.now()
+  avvia()
+}
+
+watch(() => props.animata, (nuovo, vecchio) => {
+  if (vecchio === null) {
+    partenza()
+    return
+  }
+  if (nuovo === false) azzera()
+  else riprendi()
+  avvia()
+})
 
 let osservatore, mq, ro
 function cambiaVisibilita() {
@@ -262,12 +312,11 @@ onMounted(async () => {
   } catch {
     return
   }
-  pronto.value = true
-  inizio = performance.now()
   osservatore = new IntersectionObserver(([v]) => { visibile = v.isIntersecting; avvia() })
   osservatore.observe(contenitore.value)
   document.addEventListener('visibilitychange', cambiaVisibilita)
-  avvia()
+  datiPronti = true
+  partenza()
 })
 
 onBeforeUnmount(() => {
@@ -298,13 +347,17 @@ onBeforeUnmount(() => {
     />
     <canvas ref="tela" role="img" aria-label="L'elmo di Age of Empires Italia disegnato con migliaia di punti, che si inclina seguendo il puntatore" />
     <button
-      v-if="pronto"
+      v-if="pronto && animata !== false"
       type="button"
       class="nuvola__pausa keep-motion"
       :aria-pressed="inPausa"
+      :aria-label="inPausa ? 'Riprendi animazione' : 'Ferma animazione'"
+      :title="inPausa ? 'Riprendi' : 'Ferma'"
       @click.stop="pausa"
     >
-      {{ inPausa ? 'Riprendi' : 'Ferma' }}
+      <!-- quadrato rosso = stop; in pausa compare il triangolo = riprendi -->
+      <span v-if="inPausa" class="nuvola__play" aria-hidden="true"></span>
+      <span v-else class="nuvola__stop" aria-hidden="true"></span>
     </button>
   </div>
 </template>

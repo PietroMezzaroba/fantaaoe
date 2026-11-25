@@ -1,7 +1,7 @@
 // Chiamate alle API e piccole funzioni di formato condivise dalle pagine.
 
 export async function api(percorso) {
-  const r = await fetch(`/api/${percorso}`, { credentials: 'same-origin' })
+  const r = await fetch(`/api/${percorso}`, { credentials: 'same-origin', cache: 'no-store' })
   if (!r.ok) {
     let msg = r.status === 404 ? 'non trovato' : `errore ${r.status}`
     try { const j = await r.json(); if (j?.errore) msg = j.errore } catch {}
@@ -14,6 +14,7 @@ export async function apiInvia(percorso, metodo, corpo) {
   const r = await fetch(`/api/${percorso}`, {
     method: metodo,
     credentials: 'same-origin',
+    cache: 'no-store',
     headers: corpo !== undefined ? { 'Content-Type': 'application/json' } : undefined,
     body: corpo !== undefined ? JSON.stringify(corpo) : undefined,
   })

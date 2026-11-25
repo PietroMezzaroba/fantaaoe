@@ -5,9 +5,32 @@
 // - suonoAggiudicato(): martelletto + accordo finale
 import { ref } from 'vue'
 
-// Attivo di default a meno che l'utente non lo abbia spento esplicitamente
-export const audioAttivo = ref(localStorage.getItem('fantaage_muto') !== '1')
+// Impostazione del profilo (utenti_info.audio_attivo, pagina /profilo): se è spenta il controllo audio non compare
+// e non parte nessun suono. Predefinito acceso; il valore vero arriva dal server dopo il login (applicaAudioUtente).
+export const audioAbilitato = ref(true)
+// Dal profilo: chiede al controllo audio di partire subito appena compare (l'utente ha appena cliccato)
+export const avvioRichiesto = ref(false)
+
+// Muto col pulsante in alto (resta nel browser): attivo a meno che l'utente non l'abbia spento
+const mutoNelBrowser = () => localStorage.getItem('fantaage_muto') === '1'
+export const audioAttivo = ref(!mutoNelBrowser())
 export const volumeAudio = ref(Number(localStorage.getItem('fantaage_vol_v3') ?? 22))
+
+// Allinea l'audio alla preferenza salvata dell'utente, senza far partire niente.
+export function applicaAudioUtente(abilitato) {
+  audioAbilitato.value = abilitato
+  audioAttivo.value = abilitato && !mutoNelBrowser()
+}
+
+// Cambio fatto dall'utente col suo switch: se lo accende la musica parte subito.
+export function impostaAudioAbilitato(acceso) {
+  audioAbilitato.value = acceso
+  audioAttivo.value = acceso
+  if (acceso) {
+    localStorage.removeItem('fantaage_muto')
+    avvioRichiesto.value = true
+  }
+}
 
 let ctx = null
 

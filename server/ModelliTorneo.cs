@@ -74,65 +74,10 @@ public sealed class TicketRiga
     public DateTime AggiornatoIl { get; set; }
 }
 
-public sealed class AstaStatoRiga
-{
-    public int Id { get; set; } = 1;
-    public string Stato { get; set; } = "attesa";
-    public int? IscrittoId { get; set; }
-    public int OffertaAttuale { get; set; }
-    public int? SquadraMiglioreId { get; set; }
-    public int? TurnoSquadraId { get; set; }
-    public int RoundNumero { get; set; } = 1;
-    public string? Messaggio { get; set; }
-    public DateTime? ScadenzaIl { get; set; }
-    public int DurataTimerSec { get; set; } = 15;
-    public DateTime AggiornatoIl { get; set; }
-}
-
-public sealed class IncontroTorneo
-{
-    public int Id { get; set; }
-    public string Fase { get; set; } = "girone";
-    public int Giornata { get; set; } = 1;
-    public string Girone { get; set; } = "Unico";
-    public int SquadraAId { get; set; }
-    public string SquadraANome { get; set; } = "";
-    public int SquadraBId { get; set; }
-    public string SquadraBNome { get; set; } = "";
-    public int? VinteA { get; set; }
-    public int? VinteB { get; set; }
-    public DateTime? DataProgrammata { get; set; }
-    public string Stato { get; set; } = "programmato";
-    public string? Note { get; set; }
-    public DateTime AggiornatoIl { get; set; }
-}
-
-public sealed class ClassificaSquadra
-{
-    public int SquadraId { get; set; }
-    public string Nome { get; set; } = "";
-    public string CapitanoNome { get; set; } = "";
-    public int Giocate { get; set; }
-    public int Vinte { get; set; }
-    public int Perse { get; set; }
-    public int MappeVinte { get; set; }
-    public int MappePerse { get; set; }
-    public int Punti { get; set; }
-}
-
-public sealed class AstaOffertaRiga
-{
-    public int Id { get; set; }
-    public int IscrittoId { get; set; }
-    public int SquadraId { get; set; }
-    public string SquadraNome { get; set; } = "";
-    public int Importo { get; set; }
-    public bool Annullata { get; set; }
-    public string CreataDa { get; set; } = "";
-    public DateTime CreataIl { get; set; }
-}
-
 // ---------- Request DTOs ----------
+
+// Impostazioni dell'utente: si manda solo quella cambiata, l'altra resta com'è
+public sealed record RichiestaImpostazioni(bool? AudioAttivo, bool? LayoutScuro, string? Cursore, bool? AnimazioneIniziale);
 
 public sealed record RichiestaCollega(int? PlayerId, bool? Verificato);
 
@@ -170,31 +115,4 @@ public sealed record RichiestaGestisciTicket(
     string Stato,
     string? RispostaAdmin);
 
-public sealed record RichiestaChiamaAsta(
-    int IscrittoId,
-    int? PrezzoPartenza);
-
-public sealed record RichiestaStatoAsta(
-    string Stato,
-    string? Messaggio,
-    int? TurnoSquadraId,
-    int? DurataTimerSec);
-
-public sealed record RichiestaOffertaAsta(
-    int Importo,
-    int? SquadraId);
-
 public sealed record RichiestaStatoIscritto(string Stato);
-
-public sealed record RichiestaIncontro(
-    int? Id,
-    string Fase,
-    int Giornata,
-    string? Girone,
-    int SquadraAId,
-    int SquadraBId,
-    int? VinteA,
-    int? VinteB,
-    string? DataProgrammata,
-    string Stato,
-    string? Note);

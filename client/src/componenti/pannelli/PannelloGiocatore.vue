@@ -246,13 +246,13 @@ onMounted(caricaTutto)
           <div class="misura">
             <dt>FantaAge 2026</dt>
             <dd v-if="profilo.iscrizione">
-              <template v-if="profilo.iscrizione.stato === 'in_attesa'">In attesa</template>
+              <template v-if="profilo.iscrizione.stato === 'in_validazione'">In attesa</template>
               <template v-else-if="profilo.iscrizione.stato === 'respinto'">Respinta</template>
               <template v-else>Fascia {{ profilo.iscrizione.fascia }}</template>
             </dd>
             <dd v-else class="muto">—</dd>
             <small v-if="profilo.iscrizione">
-              <template v-if="profilo.iscrizione.stato === 'in_attesa'">Richiesta inviata agli admin</template>
+              <template v-if="profilo.iscrizione.stato === 'in_validazione'">Richiesta inviata agli admin</template>
               <template v-else-if="profilo.iscrizione.squadraNome">
                 {{ profilo.iscrizione.squadraNome }} · {{ profilo.iscrizione.prezzoAsta }} Berlu
               </template>

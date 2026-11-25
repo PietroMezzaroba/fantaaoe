@@ -1,11 +1,15 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { suonoHover } from '../suoni.js'
+import { sessione, impostazioniPredefinite } from '../sessione.js'
 
 const progresso = ref(0)
 const mostraBarra = ref(false)
 
-// Cursore moderno (solo desktop con puntatore preciso)
+// Cursore "accattivante" (solo desktop con puntatore preciso) oppure "classico" (nessun override: la freccia del sistema).
+// La scelta sta nel profilo dell'utente (utenti_info.cursore).
+const puntatoreFine = ref(false)
+const vuoleAccattivante = computed(() => (sessione.impostazioni?.cursore ?? impostazioniPredefinite.cursore) !== 'classico')
 const cursoreAttivo = ref(false)
 const suInterattivo = ref(false)
 const premuto = ref(false)
@@ -62,6 +66,33 @@ function animaAnello() {
   raf = requestAnimationFrame(animaAnello)
 }
 
+function attivaCursore() {
+  if (cursoreAttivo.value) return
+  cursoreAttivo.value = true
+  document.documentElement.classList.add('cursore-moderno')
+  window.addEventListener('pointerdown', suMouseDown, { passive: true })
+  window.addEventListener('pointerup', suMouseUp, { passive: true })
+  document.addEventListener('mouseleave', suMouseLeave)
+  raf = requestAnimationFrame(animaAnello)
+}
+
+function disattivaCursore() {
+  if (!cursoreAttivo.value) return
+  cursoreAttivo.value = false
+  document.documentElement.classList.remove('cursore-moderno')
+  window.removeEventListener('pointerdown', suMouseDown)
+  window.removeEventListener('pointerup', suMouseUp)
+  document.removeEventListener('mouseleave', suMouseLeave)
+  cancelAnimationFrame(raf)
+  premuto.value = false
+  suInterattivo.value = false
+}
+
+function aggiornaCursore() {
+  if (puntatoreFine.value && vuoleAccattivante.value) attivaCursore()
+  else disattivaCursore()
+}
+
 onMounted(() => {
   aggiornaScroll()
   window.addEventListener('scroll', aggiornaScroll, { passive: true })
@@ -70,27 +101,20 @@ onMounted(() => {
   const fine = window.matchMedia('(pointer: fine)').matches
   const riduci = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   if (fine && !riduci) {
-    cursoreAttivo.value = true
-    document.documentElement.classList.add('cursore-moderno')
+    puntatoreFine.value = true
+    // il suono al passaggio sugli elementi cliccabili c'è con entrambi i cursori
     window.addEventListener('pointermove', suMouseMove, { passive: true })
-    window.addEventListener('pointerdown', suMouseDown, { passive: true })
-    window.addEventListener('pointerup', suMouseUp, { passive: true })
-    document.addEventListener('mouseleave', suMouseLeave)
-    raf = requestAnimationFrame(animaAnello)
+    aggiornaCursore()
   }
 })
+
+watch(vuoleAccattivante, aggiornaCursore)
 
 onUnmounted(() => {
   window.removeEventListener('scroll', aggiornaScroll)
   window.removeEventListener('resize', aggiornaScroll)
-  if (cursoreAttivo.value) {
-    document.documentElement.classList.remove('cursore-moderno')
-    window.removeEventListener('pointermove', suMouseMove)
-    window.removeEventListener('pointerdown', suMouseDown)
-    window.removeEventListener('pointerup', suMouseUp)
-    document.removeEventListener('mouseleave', suMouseLeave)
-    cancelAnimationFrame(raf)
-  }
+  window.removeEventListener('pointermove', suMouseMove)
+  disattivaCursore()
 })
 </script>
 

@@ -1,16 +1,13 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { api } from '../api.js'
-import { ruoli } from '../ruoli.js'
-import { sessione, linkAccesso } from '../sessione.js'
+import { sessione, impostazioniPredefinite } from '../sessione.js'
 import NuvolaElmo from '../componenti/NuvolaElmo.vue'
-import AstaProva from '../componenti/AstaProva.vue'
 import UnitaAoe from '../componenti/UnitaAoe.vue'
+import ConfermaIscrizione from '../componenti/ConfermaIscrizione.vue'
 
 // Fatti dall'handbook del Fanta Age 2025 (5ª edizione) e dai fogli 2024 e 2025.
 const HANDBOOK = 'https://docs.google.com/document/d/1l6GwnV2-LH0DC-zBCRcFXmZbd14KPQopuweMsNGHitM/edit?usp=sharing'
-const DISCORD_TORNEO = 'https://discord.gg/3XJvuJwsHX'
-const TWITCH = 'https://www.twitch.tv/ageofempiresitalia'
 
 const fasce = [
   ['A', 'I tre seed più alti della rosa'],
@@ -34,7 +31,13 @@ const albo = [
   ['2025', 'Team Pier', 'finale 5–3 con Team Apo'],
   ['2024', 'Team Carma', 'finale 6–3 con Team Scranton'],
 ]
-const admin = ['Loris', 'MrDJM', 'P3rk', 'Null', 'Muca', 'Tiniae', 'Zaffo']
+
+// Animazione dell'elmo (profilo: animazione_iniziale). null = impostazioni ancora in arrivo, l'elmo aspetta.
+const animazioneElmo = computed(() =>
+  sessione.caricata ? (sessione.impostazioni?.animazioneIniziale ?? impostazioniPredefinite.animazioneIniziale) : null)
+
+// Iscrizione: serve essere connessi; per ora la conferma chiude soltanto la form
+const confermaAperta = ref(false)
 
 const stat = ref(null)
 const errore = ref(false)
@@ -68,19 +71,29 @@ const descrizioneBarre = computed(() => {
       <div class="apertura__testo">
         <h1 id="titolo-apertura">FantaAge</h1>
         <p class="lead">Il torneo a squadre di AoE Italia. I capitani comprano la rosa all'asta.</p>
-        <div class="apertura__azioni">
-          <a href="#asta" class="btn btn--grande">Prova l'asta</a>
-          <a :href="HANDBOOK" class="btn btn--linea btn--grande" target="_blank" rel="noopener">Il regolamento</a>
-        </div>
+        <a :href="HANDBOOK" class="btn btn--linea btn--grande" target="_blank" rel="noopener">Il regolamento</a>
         <p class="apertura__quando">
           Sesta edizione: da metà dicembre 2026, date precise in arrivo
         </p>
+        <p class="lead">
+          Vuoi iscriverti a questo fantastico torneo?
+        </p>
+        <button
+          type="button"
+          class="btn btn--linea btn--grande btn--a-capo"
+          :disabled="!sessione.autenticato"
+          @click="confermaAperta = true"
+        >
+          {{ !sessione.caricata || sessione.autenticato ? 'Iscriviti!' : 'Per iscriversi devi prima loggarti' }}
+        </button>
       </div>
       <div class="apertura__scena">
-        <NuvolaElmo :centro-x="0.5" :quota="0.95" />
+        <NuvolaElmo :centro-x="0.5" :quota="0.95" :animata="animazioneElmo" />
       </div>
     </div>
   </section>
+
+  <ConfermaIscrizione :aperta="confermaAperta" @chiudi="confermaAperta = false" />
 
   <div class="container">
     <section class="riga" aria-labelledby="titolo-numeri">
@@ -133,17 +146,6 @@ const descrizioneBarre = computed(() => {
       </div>
     </section>
 
-    <section id="asta" class="riga" aria-labelledby="titolo-asta">
-      <div class="riga__testo">
-        <h2 id="titolo-asta">Un'asta, giocata da te</h2>
-        <p>Le regole vere: 401 Berlu a capitano, offerta minima 1, chiamata a turno. Giocatori veri, prezzi finti.</p>
-        <p class="muto">Nel torneo l'offerta massima lascia almeno un Berlu per ogni posto ancora vuoto in rosa.</p>
-      </div>
-      <div class="riga__prova">
-        <AstaProva />
-      </div>
-    </section>
-
     <section class="riga riga--inversa" aria-labelledby="titolo-fasce">
       <div class="riga__testo">
         <h2 id="titolo-fasce">Dieci giocatori, tre fasce</h2>
@@ -187,27 +189,6 @@ const descrizioneBarre = computed(() => {
           <span>{{ cosa }}</span>
         </li>
       </ol>
-    </section>
-
-    <section class="riga riga--inversa riga--chiusura" aria-labelledby="titolo-entrare">
-      <div class="riga__testo">
-        <h2 id="titolo-entrare">La prima volta</h2>
-        <p>Iscrizioni e partite passano dal server Discord dei tornei. Su questo sito entri con lo stesso account.</p>
-        <div class="apertura__azioni">
-          <a :href="DISCORD_TORNEO" class="btn btn--linea" target="_blank" rel="noopener">Server dei tornei</a>
-          <a :href="TWITCH" class="btn btn--linea" target="_blank" rel="noopener">Le dirette su Twitch</a>
-          <a v-if="sessione.loginAttivo && !sessione.autenticato" :href="linkAccesso('/pannelli')" class="btn btn--linea">Entra con Discord</a>
-        </div>
-        <p class="muto piccolo">Admin: {{ admin.join(', ') }}.</p>
-      </div>
-      <ul class="porte riga__prova">
-        <li v-for="r in ruoli" :key="r.chiave" class="porta">
-          <RouterLink :to="`/pannello/${r.chiave}`">
-            <span class="porta__nome">{{ r.nome }}</span>
-            <span class="porta__cosa">{{ r.cosa }}</span>
-          </RouterLink>
-        </li>
-      </ul>
     </section>
   </div>
 </template>
