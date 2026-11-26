@@ -85,7 +85,15 @@ public class Program
             });
         }
         builder.Services.AddAuthorization();
-        builder.Services.AddSignalR();
+        // un collegamento caduto di colpo (browser chiuso, rete spenta) viene rilevato in pochi secondi: ping ogni 5 s, scaduto dopo 15 s
+        builder.Services.AddSignalR(o =>
+        {
+            o.KeepAliveInterval = TimeSpan.FromSeconds(5);
+            o.ClientTimeoutInterval = TimeSpan.FromSeconds(15);
+        });
+        builder.Services.AddSingleton<PresenzeAsta>();
+        builder.Services.AddSingleton<TimerAsta>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<TimerAsta>());
 
         var app = builder.Build();
 

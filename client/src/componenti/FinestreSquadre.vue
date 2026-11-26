@@ -1,11 +1,14 @@
 <script setup>
 // Le finestre dell'asta: una "finestra" per squadra (nome, capitano, elenco giocatori), quattro per riga.
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { api } from '../api.js'
+import { api, apiPost } from '../api.js'
 import StatoDati from './StatoDati.vue'
+import FinestraModale from './FinestraModale.vue'
+import { ascoltaAsta } from '../astaLive.js'
 
 // quattro = true: sempre 4 finestre per riga; se il contenitore è stretto, tutto (testi compresi) si rimpicciolisce
-const props = defineProps({ quattro: { type: Boolean, default: false } })
+// streamer = true: tasto destro su un giocatore acquistato per eliminare l'acquisto (solo a offerta terminata)
+const props = defineProps({ quattro: { type: Boolean, default: false }, streamer: Boolean })
 const LARGHEZZA_BASE = 1000 // larghezza a cui 4 finestre stanno a grandezza normale
 const contenitore = ref(null)
 const scala = ref(1)
@@ -31,8 +34,8 @@ const squadre = ref([])
 const caricamento = ref(true)
 const errore = ref('')
 
-async function carica() {
-  caricamento.value = true
+async function carica(silenzioso = false) {
+  if (!silenzioso) caricamento.value = true
   errore.value = ''
   try {
     squadre.value = await api('asta/squadre')
@@ -42,7 +45,61 @@ async function carica() {
     caricamento.value = false
   }
 }
-onMounted(carica)
+// Eliminare un acquisto (streamer): tasto destro sul giocatore => "Elimina acquisto" => conferma. Solo a offerta terminata.
+const fase = ref('')
+async function leggiFase() {
+  if (!props.streamer) return
+  try {
+    fase.value = (await api('asta/puntate')).fase
+  } catch {
+    /* resta com'era */
+  }
+}
+const puoEliminare = computed(() => fase.value === 'acquisto fatto')
+// lo streamer, a offerta terminata, vede il cursore del menu contestuale sui giocatori eliminabili
+const puoEliminareRiga = (g) => props.streamer && puoEliminare.value && g.eliminabile
+const menu = ref(null) // { x, y, squadra, giocatore }
+const conferma = ref(null) // { squadra, giocatore }
+const eliminando = ref(false)
+const erroreElimina = ref('')
+const vFocus = { mounted: (el) => el.focus() }
+
+function suClickDestro(e, squadra, giocatore) {
+  if (!props.streamer || !giocatore?.eliminabile) return // altrove resta il menu normale del browser
+  e.preventDefault()
+  menu.value = { x: e.clientX, y: e.clientY, squadra, giocatore }
+}
+function chiediConferma() {
+  conferma.value = { squadra: menu.value.squadra, giocatore: menu.value.giocatore }
+  erroreElimina.value = ''
+  menu.value = null
+}
+async function eliminaAcquisto() {
+  eliminando.value = true
+  erroreElimina.value = ''
+  try {
+    await apiPost('asta/elimina-acquisto', { idAcquisto: conferma.value.giocatore.idAcquisto })
+    conferma.value = null
+  } catch (e) {
+    erroreElimina.value = e.message
+  } finally {
+    eliminando.value = false
+  }
+}
+
+// quando un'offerta si chiude il giocatore entra nella squadra: il server lo comunica (SignalR), le finestre si aggiornano senza polling
+let smettiDiAscoltare = () => {}
+onMounted(() => {
+  carica()
+  smettiDiAscoltare = ascoltaAsta({ suEvento: (e) => {
+      if (e.puntate) fase.value = e.puntate.fase
+      if (['acquisto', 'eliminato'].includes(e.tipo)) carica(true)
+    },
+    suRiconnesso: () => { carica(true); leggiFase() },
+  })
+  leggiFase()
+})
+onBeforeUnmount(() => smettiDiAscoltare())
 
 // colore della riga in base alla posizione in classifica di squadra (per ELO): 1-3 rosso, 4-6 giallo, dal 7 azzurro
 const fascia = (i) => (i < 3 ? 'rosso' : i < 6 ? 'giallo' : 'azzurro')
@@ -91,7 +148,8 @@ function righe(squadra) {
           <li
             v-for="(g, i) in righe(s)"
             :key="i"
-            :class="g ? [g.capitano && 'capitano', fascia(i)] : 'vuota'"
+            :class="g ? [g.capitano && 'capitano', fascia(i), puoEliminareRiga(g) && 'eliminabile'] : 'vuota'"
+            @contextmenu="suClickDestro($event, s, g)"
           >
             <span class="squadra__numero" aria-hidden="true">{{ i + 1 }}</span>
             <span class="squadra__giocatore" :title="g?.nome">
@@ -117,6 +175,39 @@ function righe(squadra) {
     </div>
     </div>
   </StatoDati>
+
+  <!-- fuori dal contenitore (Teleport): le finestre possono essere rimpicciolite e questi elementi devono restare a grandezza normale -->
+  <Teleport to="body">
+    <div v-if="menu" class="menu-velo" @click="menu = null" @contextmenu.prevent="menu = null" @keydown.esc="menu = null">
+      <ul class="menu-contesto" role="menu" :style="{ left: menu.x + 'px', top: menu.y + 'px' }" @click.stop>
+        <li role="none">
+          <button
+            type="button"
+            role="menuitem"
+            :disabled="!puoEliminare"
+            :title="puoEliminare ? '' : 'Si può eliminare un acquisto solo a offerta terminata (prima di avviare una nuova offerta)'"
+            @click="chiediConferma"
+          >
+            Elimina acquisto
+          </button>
+        </li>
+      </ul>
+    </div>
+    <FinestraModale v-if="conferma" titolo="Elimina acquisto" @chiudi="conferma = null">
+      <div class="conferma-elimina">
+        <p>Vuoi eliminare l'acquisto di <strong>{{ conferma.giocatore.nome }}</strong> ({{ conferma.squadra.nome }}, {{ conferma.giocatore.costo }} crediti)?</p>
+        <p>
+          Il giocatore tornerà disponibile, le sue offerte verranno cancellate e
+          <strong>{{ conferma.giocatore.costo }}</strong> crediti saranno restituiti a <strong>{{ conferma.squadra.capitano }}</strong>.
+        </p>
+        <p v-if="erroreElimina" class="conferma-elimina__errore" role="alert">{{ erroreElimina }}</p>
+        <div class="conferma-elimina__azioni">
+          <button v-focus type="button" class="btn btn--linea" :disabled="eliminando" @click="conferma = null">Annulla</button>
+          <button type="button" class="btn" :disabled="eliminando" @click="eliminaAcquisto">Elimina acquisto</button>
+        </div>
+      </div>
+    </FinestraModale>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -152,7 +243,7 @@ function righe(squadra) {
 .squadra__totali .squadra__tot span { font-size: 0.6rem; color: var(--color-muted); font-weight: 400; text-align: center; overflow-wrap: normal; }
 .squadra__num { font-variant-numeric: tabular-nums; }
 .squadra__elenco li {
-  min-height: 2rem; padding-block: var(--space-2xs, 4px);
+  min-height: 1.35rem; padding-block: 1px;
   border-bottom: var(--rule-hair) dashed var(--color-rule);
 }
 .squadra__elenco li:last-child { border-bottom: 0; }
@@ -171,4 +262,26 @@ function righe(squadra) {
 .squadre-contenitore { container-type: inline-size; }
 @container (max-width: 1000px) { .quattro .squadre { grid-template-columns: repeat(4, minmax(0, 1fr)); } .squadre-contenitore:not(.quattro) .squadre { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (max-width: 560px) { .squadre-contenitore:not(.quattro) .squadre { grid-template-columns: minmax(0, 1fr); } }
+
+/* giocatore eliminabile (tasto destro): mano al passaggio del mouse e riga verde (il cursore "context-menu" su Windows resta una freccia) */
+.squadra__elenco li.eliminabile { cursor: pointer; }
+.squadra__elenco li.eliminabile:hover { background: color-mix(in oklch, oklch(72% 0.17 150) 45%, transparent); }
+
+/* menu col tasto destro */
+.menu-velo { position: fixed; inset: 0; z-index: var(--z-modal, 100); }
+.menu-contesto {
+  position: fixed; margin: 0; padding: var(--space-3xs, 2px); list-style: none; min-width: 10rem;
+  background: var(--color-paper-2); border: var(--rule-hair) solid var(--color-rule-2); border-radius: var(--radius-card);
+  box-shadow: 0 6px 20px oklch(10% 0.02 255 / 0.35);
+}
+.menu-contesto button {
+  display: block; width: 100%; padding: var(--space-xs) var(--space-sm); text-align: left; font: inherit; color: inherit;
+  background: transparent; border: 0; border-radius: calc(var(--radius-card) - 2px); cursor: pointer;
+}
+.menu-contesto button:hover:not(:disabled) { background: var(--color-paper-3); }
+.menu-contesto button:disabled { color: var(--color-muted); cursor: not-allowed; }
+.conferma-elimina { display: grid; gap: var(--space-md); }
+.conferma-elimina p { margin: 0; }
+.conferma-elimina__errore { color: var(--color-danger, #e5484d); }
+.conferma-elimina__azioni { display: flex; justify-content: flex-end; gap: var(--space-xs); }
 </style>

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OutputCaching;
+using Microsoft.AspNetCore.SignalR;
 using Npgsql;
 using static FantaAoe.Api.TorneoUtil;
 
@@ -18,8 +19,13 @@ public class AuthController : ControllerBase
     private readonly ConfigAccesso accesso;
     private readonly IWebHostEnvironment ambiente;
 
-    public AuthController(IWebHostEnvironment ambiente, ConfigAccesso accesso, NpgsqlDataSource? db = null)
+    private readonly PresenzeAsta presenze;
+    private readonly IHubContext<AstaHub> hub;
+
+    public AuthController(IWebHostEnvironment ambiente, ConfigAccesso accesso, PresenzeAsta presenze, IHubContext<AstaHub> hub, NpgsqlDataSource? db = null)
     {
+        this.presenze = presenze;
+        this.hub = hub;
         this.ambiente = ambiente;
         this.db = db;
         this.accesso = accesso;
@@ -34,7 +40,11 @@ public class AuthController : ControllerBase
     [HttpGet("/api/auth/esci")]
     public async Task<IResult> Esci()
     {
+        // chi esce non è più sulla pagina dell'asta: lo si toglie subito dai presenti, senza aspettare che si chiuda il collegamento
+        var utente = EAutenticato(User) ? DiscordId(User) : null;
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        if (utente is not null && presenze.RimuoviUtente(utente))
+            await hub.Clients.All.SendAsync(AstaHub.EventoPresenze, presenze.Elenco());
         return Results.Redirect("/");
     }
 

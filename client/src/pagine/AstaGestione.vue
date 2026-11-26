@@ -8,14 +8,14 @@ import PuntateCapitani from '../componenti/PuntateCapitani.vue'
 <template>
   <div class="asta-capitano">
     <section class="asta-capitano__meta" aria-label="Squadre">
-      <FinestreSquadre quattro />
+      <FinestreSquadre quattro streamer />
     </section>
     <section class="asta-capitano__meta" aria-label="Giocatori">
       <div class="asta-capitano__disponibili">
         <GiocatoriDisponibili />
       </div>
       <div class="asta-capitano__puntate">
-        <PuntateCapitani :offerte="false" />
+        <PuntateCapitani :offerte="false" streamer />
       </div>
     </section>
   </div>

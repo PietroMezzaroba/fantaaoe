@@ -39,7 +39,7 @@ const ricarica = () => Promise.all([carica(), caricaTurno()])
 let smettiDiAscoltare = () => {}
 onMounted(() => {
   ricarica()
-  smettiDiAscoltare = ascoltaAsta({ suEvento: (e) => e.tipo === 'chiamata' && ricarica(), suRiconnesso: ricarica })
+  smettiDiAscoltare = ascoltaAsta({ suEvento: (e) => !['offerta', 'timer'].includes(e.tipo) && ricarica(), suRiconnesso: ricarica })
 })
 onBeforeUnmount(() => smettiDiAscoltare())
 
@@ -140,6 +140,11 @@ const visibili = computed(() => {
 }
 .disponibili__elenco li { align-items: center; }
 /* tasto minimo: poco più alto del testo, così le righe restano compatte */
+/* non cliccabile (non è il tuo turno): grigio e senza effetto al passaggio del mouse */
+.disponibili__chiama:disabled, .disponibili__chiama:disabled:hover {
+  background: var(--color-paper-3); border-color: var(--color-rule-2); color: var(--color-muted);
+  opacity: 1; cursor: not-allowed; box-shadow: none;
+}
 .disponibili__chiama { flex: 0 0 auto; min-height: 0; height: auto; padding: 0 var(--space-xs); font-size: 0.7rem; line-height: 1.5; }
 .offerta { display: grid; gap: var(--space-md); }
 .offerta p { margin: 0; }
