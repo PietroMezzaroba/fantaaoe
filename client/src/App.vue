@@ -35,13 +35,13 @@ onMounted(async () => {
       </RouterLink>
       <nav class="menu" aria-label="Sezioni">
         <RouterLink to="/asta">Asta</RouterLink>
-        <!-- voci nascoste per ora (le pagine esistono ancora): Pannelli, Torneo, Classifica, Partite
-        <RouterLink to="/pannelli">Pannelli</RouterLink>
-        <RouterLink to="/torneo">Torneo</RouterLink>
         <RouterLink to="/classifica">Classifica</RouterLink>
         <RouterLink to="/partite">Partite</RouterLink>
-        -->
         <RouterLink to="/civilta">Civiltà</RouterLink>
+        <!-- voci nascoste per ora (le pagine esistono ancora): Pannelli e Torneo, le riaccende Jason man mano
+        <RouterLink to="/pannelli">Pannelli</RouterLink>
+        <RouterLink to="/torneo">Torneo</RouterLink>
+        -->
         <RouterLink v-if="sessione.autenticato && sessione.ruoli.includes('admin')" to="/admin">Admin</RouterLink>
         <a v-if="handbook" :href="handbook" target="_blank" rel="noopener">Handbook</a>
       </nav>

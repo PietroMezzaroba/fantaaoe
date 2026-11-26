@@ -95,7 +95,8 @@ const righe = computed(() => {
             <th scope="col" class="nascondi-stretto">Ultimo Dito</th>
           </tr>
         </thead>
-        <tbody>
+        <!-- cambiando colonna le righe scivolano al posto nuovo; mentre si cerca la tabella cambia di colpo -->
+        <TransitionGroup tag="tbody" :name="cerca.trim() ? 'classifica-ferma' : 'classifica'">
           <tr v-for="(g, i) in righe" :key="g.playerId">
             <td class="pos num">{{ i + 1 }}</td>
             <td class="nome">
@@ -109,9 +110,14 @@ const righe = computed(() => {
             <td class="num tenue nascondi-stretto">{{ g.nDiti ? percento(g.winrate) : '—' }}</td>
             <td class="muto nascondi-stretto">{{ fa(g.ultimoDito) }}</td>
           </tr>
-        </tbody>
+        </TransitionGroup>
       </table>
     </div>
     <p class="muto piccolo" style="margin-top: var(--space-md)">{{ righe.length }} giocatori</p>
   </StatoDati>
 </template>
+
+<style scoped>
+/* ---------- movimento ---------- */
+.classifica-move { transition: transform var(--dur-long) var(--ease-out); }
+</style>

@@ -43,9 +43,10 @@ onMounted(altre)
     testo-vuoto="Non c'è ancora nessuna partita registrata."
     @riprova="altre"
   >
-    <ul class="partite">
+    <!-- le partite in più («Mostra altre 30») entrano scivolando dal basso -->
+    <TransitionGroup tag="ul" name="partita" class="partite">
       <SchedaPartita v-for="x in elenco" :key="x.partita.idGame" :partita="x.partita" :giocatori="x.giocatori" />
-    </ul>
+    </TransitionGroup>
     <div class="ancora">
       <p v-if="errore" class="perso" role="alert">Le altre partite non sono arrivate ({{ errore }}).</p>
       <button
@@ -61,3 +62,9 @@ onMounted(altre)
     </div>
   </StatoDati>
 </template>
+
+<style scoped>
+/* ---------- movimento ---------- */
+:deep(.partita-enter-active) { transition: transform var(--dur-long) var(--ease-out); }
+:deep(.partita-enter-from) { transform: translateY(12px); }
+</style>
