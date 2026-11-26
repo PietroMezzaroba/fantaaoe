@@ -177,6 +177,10 @@ INSERT INTO fanta_torneo.configurazioni (chiave, valore, descrizione)
 VALUES ('timer_asta_secondi', '120', 'Secondi del timer dell''offerta: parte dalla prima puntata, si riporta a questo valore a ogni offerta e a zero chiude l''offerta')
 ON CONFLICT (chiave) DO NOTHING;
 
+INSERT INTO fanta_torneo.configurazioni (chiave, valore, descrizione)
+VALUES ('valuta', 'Berlu', 'Nome della moneta dell''asta: compare al posto della parola "crediti" in tutte le pagine dell''asta')
+ON CONFLICT (chiave) DO NOTHING;
+
 -- Asta (da riscrivere da capo): le vecchie tabelle asta_stato e asta_offerte sono state eliminate
 
 -- Portafoglio d'asta di un utente: credito virtuale iniziale e credito che gli resta
