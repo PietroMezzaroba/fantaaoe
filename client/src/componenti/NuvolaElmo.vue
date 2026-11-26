@@ -8,7 +8,7 @@
 // Motore: WebGPU dove c'è (fisica dei punti in un compute shader, punti tondi e scie quando corrono, elmoGpu.js);
 // altrimenti il disegno 2D di sempre. Se la GPU si perde a metà, la tela si ricrea e si passa al 2D.
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { suonoRilancio, suonoFischio, suonoImpatto } from '../suoni.js'
+import { suonoRilancio, suonoFischio, suonoImpatto, suonoCaduta } from '../suoni.js'
 import { creaElmoGpu } from '../elmoGpu.js'
 
 // centroX: dove sta l'elmo in larghezza (0..1); quota: quanta larghezza può occupare
@@ -45,7 +45,53 @@ const puntatore = { x: -9999, y: -9999, attivo: false }
 let inizio = 0
 
 // Carica del Paladino di AoE2 DE (profilo laterale dir 6) a velocità realistica (~135 px/s)
-const carica = { attiva: false, inizio: 0, durata: 5.2, prossimo: 2.8, suonato: false }
+const carica = { attiva: false, inizio: 0, durata: 5.2, prossimo: 2.8, suonato: false, x: -9999, y: -9999, scala: 1, davanti: false,
+  morto: null, mira: null, sparato: false }
+
+// Il paladino della carica è quello vero di AoE2 DE, rosso (il nemico): sprite di PaladinoAoe (public/sprite/paladino/),
+// riga 3 = direzione 6 del gioco, verso sinistra e in basso. Se una pietra del trabucco lo prende, muore e resta a terra.
+const SPRITE = '/sprite/paladino/'
+const RIGA_CARICA = 3
+const SCALA_SPRITE = 1.25
+const TELA_PAL = { l: 200, a: 150 }
+const sprite = { meta: null, img: {}, pronti: false }
+let cpal = null
+
+function caricaSprite() {
+  fetch(SPRITE + 'paladino-rosso.json')
+    .then((r) => r.json())
+    .then((meta) => {
+      sprite.meta = meta
+      return Promise.all(['passo', 'morte', 'cadavere'].map((nome) => new Promise((ok) => {
+        const im = new Image()
+        im.onload = im.onerror = ok
+        im.src = SPRITE + meta.animazioni[nome].file
+        sprite.img[nome] = im
+      })))
+    })
+    .then(() => { sprite.pronti = true })
+    .catch(() => { /* senza sprite la carica non parte, il resto dell'elmo funziona */ })
+}
+
+// disegna un fotogramma del paladino sulla sua tela (ancorata al punto d'appoggio, un po' sotto il centro)
+function disegnaPaladino(nome, fotogramma) {
+  if (!cpal || !sprite.pronti) return
+  const a = sprite.meta.animazioni[nome]
+  const img = sprite.img[nome]
+  const [cw, ch] = a.cella
+  const [ax, ay] = a.ancora
+  cpal.clearRect(0, 0, TELA_PAL.l, TELA_PAL.a)
+  const f = Math.min(a.fotogrammi - 1, Math.max(0, fotogramma))
+  cpal.drawImage(img, f * cw, RIGA_CARICA * ch, cw, ch,
+    TELA_PAL.l / 2 - ax * SCALA_SPRITE, TELA_PAL.a / 2 + 22 - ay * SCALA_SPRITE, cw * SCALA_SPRITE, ch * SCALA_SPRITE)
+}
+
+// posizione del paladino a un certo punto della carica (0..1)
+function posizioneCarica(p) {
+  const dxTot = larghezza + 220
+  const dyTot = dxTot * 0.28
+  return [larghezza + 95 - p * dxTot, altezza * 0.42 - dyTot * 0.35 + p * dyTot]
+}
 
 // Trabucco: ogni tanto (e a ogni clic) una pietra infuocata arriva da fuori, in alto a destra, e cade sull'elmo.
 // All'impatto i punti saltano via (spinta nel motore) e quelli vicini diventano brace per un attimo.
@@ -89,6 +135,11 @@ function aggiornaTrabucco(ora, dt) {
     if (t >= 1) {
       p.finita = true
       trabucco.impatto = { x: p.tx, y: p.ty, inizio: ora }
+      // preso! (il paladino in carica, se la pietra gli cade addosso)
+      if (carica.attiva && !carica.morto && Math.abs(p.tx - carica.x) < 75 && Math.abs(p.ty - (carica.y - 20)) < 60) {
+        carica.morto = ora
+        suonoCaduta()
+      }
       trabucco.onde.push({ x: p.tx, y: p.ty, inizio: ora })
       for (let k = 0; k < 34; k++) {
         const a = Math.random() * Math.PI * 2, v = 0.12 + Math.random() * 0.32
@@ -173,6 +224,11 @@ function disegnaTrabucco(ora) {
 
 function lanciaCarica(ora) {
   if (ridotto || congelata.value) return
+  if (!sprite.pronti) { carica.prossimo = (ora - inizio) / 1000 + 1; return }
+  carica.morto = null
+  carica.sparato = false
+  // due cariche su tre il trabucco prova a colpirlo, in un momento a caso della prima metà del percorso
+  carica.mira = Math.random() < 0.66 ? 0.12 + Math.random() * 0.3 : null
   carica.attiva = true
   carica.inizio = ora
   carica.durata = Math.max(3.6, (larghezza + 220) / 135)
@@ -267,24 +323,47 @@ function disegna(ora) {
   }
 
   let cavAttivo = false, cavX = -9999, cavY = -9999
-  if (carica.attiva && !fermo) {
+  if (carica.attiva && !fermo && carica.morto) {
+    // colpito dal trabucco: animazione di morte del gioco, poi il cadavere che sbiadisce, fermo dove è caduto
+    const s = (ora - carica.morto) / 1000
+    const morte = sprite.meta.animazioni.morte, cad = sprite.meta.animazioni.cadavere
+    const tMorte = morte.fotogrammi / morte.fps
+    if (s < tMorte) {
+      disegnaPaladino('morte', Math.floor(s * morte.fps))
+    } else if (s < tMorte + 3) {
+      disegnaPaladino('cadavere', Math.floor((s - tMorte) * cad.fps))
+      if (paladinoEl.value) paladinoEl.value.style.opacity = String(Math.max(0, 1 - (s - tMorte) / 3))
+    } else {
+      carica.attiva = false
+      carica.morto = null
+      carica.x = carica.y = -9999
+      if (paladinoEl.value) paladinoEl.value.style.opacity = '0'
+    }
+  } else if (carica.attiva && !fermo) {
     const pCar = (ora - carica.inizio) / 1000 / carica.durata
     if (pCar >= 1) {
       carica.attiva = false
+      carica.x = carica.y = -9999
       if (paladinoEl.value) paladinoEl.value.style.opacity = '0'
     } else {
       cavAttivo = true
       // Traiettoria coerente con l'angolo isometrico reale del Paladino (dir 6: ~22° verso sinistra-basso)
-      const dxTot = larghezza + 220
-      const dyTot = dxTot * 0.28
-      cavX = larghezza + 95 - pCar * dxTot
-      cavY = altezza * 0.42 - dyTot * 0.35 + pCar * dyTot
+      ;[cavX, cavY] = posizioneCarica(pCar)
       const scalaCav = 0.96 + pCar * 0.16 // prospettiva naturale, nessun effetto "palloncino"
       const davanti = pCar > 0.38
+      carica.x = cavX; carica.y = cavY; carica.scala = scalaCav; carica.davanti = davanti
       if (!carica.suonato && pCar > 0.44) {
         carica.suonato = true
         suonoRilancio()
       }
+      // il trabucco mira dove sarà il paladino quando la pietra arriva
+      if (carica.mira != null && !carica.sparato && pCar >= carica.mira) {
+        carica.sparato = true
+        const [mx, my] = posizioneCarica(pCar + PIETRA_VOLO / 1000 / carica.durata)
+        lanciaPietra(ora, mx, my - 20)
+      }
+      const passo = sprite.meta.animazioni.passo
+      disegnaPaladino('passo', Math.floor(((ora - carica.inizio) / 1000) * passo.fps) % passo.fotogrammi)
       if (paladinoEl.value) {
         paladinoEl.value.style.opacity = pCar < 0.08 ? String(pCar / 0.08) : pCar > 0.92 ? String((1 - pCar) / 0.08) : '1'
         paladinoEl.value.style.zIndex = davanti ? '3' : '0'
@@ -297,6 +376,7 @@ function disegna(ora) {
 
   // trabucco: prima pietra qualche secondo dopo l'ingresso, poi ogni 11-17 s, mai mentre passa il paladino
   if (!fermo && arrivo >= 1 && !carica.attiva && t >= trabucco.prossimo) lanciaPietra(ora)
+  if (carica.attiva && carica.morto) trabucco.prossimo = Math.max(trabucco.prossimo, t + 5)
   const imp = fermo ? null : aggiornaTrabucco(ora, dt)
   disegnaTrabucco(ora)
 
@@ -424,6 +504,7 @@ function esci() {
 // azzera quello che era in corso: carica del Paladino, passaggio automatico, punti spostati
 function azzera() {
   carica.attiva = false
+  carica.morto = null
   trabucco.pietre = []
   trabucco.braci = []
   trabucco.onde = []
@@ -531,6 +612,10 @@ onMounted(async () => {
     return
   }
   await preparaMotore()
+  // tela del paladino (sempre a doppia risoluzione: resta nitido anche sugli schermi retina)
+  cpal = paladinoEl.value?.getContext('2d') ?? null
+  cpal?.setTransform(2, 0, 0, 2, 0, 0)
+  caricaSprite()
   osservatore = new IntersectionObserver(([v]) => { visibile = v.isIntersecting; avvia() })
   osservatore.observe(contenitore.value)
   document.addEventListener('visibilitychange', cambiaVisibilita)
@@ -559,14 +644,13 @@ onBeforeUnmount(() => {
     @pointerleave="esci"
     @click="clic"
   >
-    <img
+    <canvas
       ref="paladinoEl"
       class="nuvola__paladino"
-      src="/sprite/paladino-carica.webp"
-      alt=""
       aria-hidden="true"
-      width="128"
-      height="124"
+      :width="TELA_PAL.l * 2"
+      :height="TELA_PAL.a * 2"
+      :style="{ width: TELA_PAL.l + 'px', height: TELA_PAL.a + 'px' }"
     />
     <canvas ref="telaEffetti" class="nuvola__effetti" aria-hidden="true" />
     <canvas :key="chiaveTela" ref="tela" role="img" aria-label="L'elmo di Age of Empires Italia disegnato con migliaia di punti, che si inclina seguendo il puntatore" />
