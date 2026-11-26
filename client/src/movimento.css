@@ -8,6 +8,10 @@
 
 /* tela degli effetti del trabucco: sopra i punti, non prende i clic */
 .nuvola .nuvola__effetti { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+/* tela del paladino della carica: fuori dal flusso, come l'immagine di prima. Serve la stessa specificità di
+   «.nuvola canvas» (stile.css), che altrimenti la rende relativa e a tutta larghezza e spinge giù l'elmo di 150 px.
+   Niente dissolvenza CSS: l'opacità la decide il codice fotogramma per fotogramma. */
+.nuvola canvas.nuvola__paladino { position: absolute; top: 0; left: 0; opacity: 0; transition: none; }
 
 /* ---------- passaggio tra le pagine (View Transitions API, main.js) ---------- */
 /* la barra in alto e la barra di scorrimento restano ferme: si muove solo il contenuto */
