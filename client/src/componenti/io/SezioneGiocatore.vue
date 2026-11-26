@@ -246,7 +246,7 @@ const statoTicket = (s) => ({ aperto: 'Aperto', in_corso: 'In lavorazione', riso
       <div class="io-riquadro">
         <div class="riga-spazio">
           <h3 class="io-titoletto">Ticket agli admin</h3>
-          <span class="muto piccolo">{{ ticket.length ? `${ticket.length} tuoi` : 'nessuno per ora' }}</span>
+          <span class="muto piccolo">{{ ticket.length ? `${ticket.length} ticket` : 'nessuno per ora' }}</span>
         </div>
         <ul v-if="ticket.length" class="ticket-lista">
           <li v-for="t in ticket" :key="t.id" class="ticket-item">

@@ -69,6 +69,7 @@ const chiSei = computed(() => {
 .io-ospite { display: grid; gap: var(--space-md); justify-items: start; max-width: 40rem; padding-block: var(--space-2xl); }
 .io-testa { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-md); align-items: center; }
 .io-testa__foto { width: 56px; height: 56px; border-radius: 50%; }
+.io-testa__impostazioni { justify-self: end; width: auto; }
 .io-testa__testo { display: grid; gap: var(--space-2xs); min-width: 0; }
 .io-testa__testo h1 { margin: 0; overflow-wrap: break-word; min-width: 0; }
 .io-testa__testo p { margin: 0; max-width: 60ch; }
@@ -104,7 +105,7 @@ const chiSei = computed(() => {
 /* disponibilità della squadra: una griglia giocatori x giorni che scorre dentro il suo riquadro */
 .io-disp-scorri { overflow-x: auto; margin-top: var(--space-xs); }
 .io-disp { border-collapse: collapse; font-size: var(--text-sm); }
-.io-disp th, .io-disp td { padding: 4px 3px; text-align: center; white-space: nowrap; }
+.io-disp th, .io-disp td { padding: var(--space-2xs); text-align: center; white-space: nowrap; }
 .io-disp thead th { font-weight: 400; color: var(--color-muted); font-size: var(--text-xs); }
 .io-disp tbody th, .io-disp tfoot th { text-align: left; font-weight: 400; max-width: 9rem; overflow: hidden; text-overflow: ellipsis; padding-right: var(--space-sm); }
 .io-disp--we { background: color-mix(in oklch, var(--color-paper-3) 45%, transparent); }
@@ -122,6 +123,9 @@ const chiSei = computed(() => {
 .io-sere li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-sm); padding: var(--space-2xs) 0; border-bottom: var(--rule-hair) solid var(--color-rule); }
 .io-sere--we .io-sere__giorno { color: var(--color-ink); font-weight: 600; }
 .io-sere__giorno { color: var(--color-ink-2); }
+/* la scelta fatta si legge al volo: sì in verde, no in rosso */
+.io-sere .scelta button:first-child[aria-pressed="true"] { background: color-mix(in oklch, var(--color-accent) 28%, var(--color-paper-3)); color: var(--color-ink); }
+.io-sere .scelta button:last-child[aria-pressed="true"] { background: color-mix(in oklch, var(--color-error) 28%, var(--color-paper-3)); color: var(--color-ink); }
 .io-nuovo-ticket summary { cursor: pointer; color: var(--color-ink-2); margin-top: var(--space-xs); }
 .io-nuovo-ticket summary:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .io-nuovo-ticket .modulo { margin-top: var(--space-md); max-width: 32rem; }
@@ -134,6 +138,9 @@ const chiSei = computed(() => {
 .io-rosa-move { transition: transform var(--dur-long) var(--ease-out); }
 .io-rosa-enter-active { transition: transform var(--dur-long) var(--ease-out); }
 .io-rosa-enter-from { transform: translateX(-14px); }
+@media (prefers-reduced-motion: reduce) {
+  .turno-enter-active, .io-rosa-move, .io-rosa-enter-active { transition: none; }
+}
 
 @media (max-width: 760px) {
   .io-due { grid-template-columns: minmax(0, 1fr); }
