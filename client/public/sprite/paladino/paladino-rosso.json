@@ -1,0 +1,76 @@
+{
+ "direzioniGioco": 16,
+ "direzioni": 8,
+ "animazioni": {
+  "fermo": {
+   "file": "paladino-rosso-fermo.webp",
+   "cella": [
+    94,
+    81
+   ],
+   "ancora": [
+    55,
+    64
+   ],
+   "fotogrammi": 15,
+   "fps": 10,
+   "ripeti": true
+  },
+  "passo": {
+   "file": "paladino-rosso-passo.webp",
+   "cella": [
+    102,
+    82
+   ],
+   "ancora": [
+    60,
+    63
+   ],
+   "fotogrammi": 15,
+   "fps": 15,
+   "ripeti": true
+  },
+  "attacco": {
+   "file": "paladino-rosso-attacco.webp",
+   "cella": [
+    93,
+    87
+   ],
+   "ancora": [
+    55,
+    70
+   ],
+   "fotogrammi": 15,
+   "fps": 15,
+   "ripeti": true
+  },
+  "morte": {
+   "file": "paladino-rosso-morte.webp",
+   "cella": [
+    137,
+    96
+   ],
+   "ancora": [
+    68,
+    61
+   ],
+   "fotogrammi": 23,
+   "fps": 18,
+   "ripeti": false
+  },
+  "cadavere": {
+   "file": "paladino-rosso-cadavere.webp",
+   "cella": [
+    136,
+    69
+   ],
+   "ancora": [
+    68,
+    34
+   ],
+   "fotogrammi": 10,
+   "fps": 4,
+   "ripeti": false
+  }
+ }
+}
