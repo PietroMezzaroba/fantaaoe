@@ -81,7 +81,12 @@ onMounted(async () => {
   <footer class="piede">
     <div class="container">
       <span>Dati della classifica interna dei TG Dito e delle ranked di Age of Empires II</span>
-      <span>Community Age of Empires Italia · Age of Empires II: DE © Microsoft Corp. (Game Content Usage Rules)</span>
+      <span>
+        Community Age of Empires Italia · FantaAge was created under Microsoft's
+        "<a href="https://www.xbox.com/en-US/developers/rules" target="_blank" rel="noopener">Game Content Usage Rules</a>"
+        using assets from Age of Empires II: Definitive Edition, and it is not endorsed by or affiliated with Microsoft.
+        Age of Empires II © Microsoft Corporation.
+      </span>
     </div>
   </footer>
   <EffettiUi />

@@ -38,6 +38,8 @@ async function assicuraPlayer() {
   return new Promise((resolve) => {
     if (player && ytPronto.value) return resolve(player)
     player = new window.YT.Player('fanta-yt-audio', {
+      // youtube-nocookie: il lettore non lascia cookie di Google finché non si guarda il video su YouTube
+      host: 'https://www.youtube-nocookie.com',
       height: '1',
       width: '1',
       videoId: tracce[indice.value].id,
