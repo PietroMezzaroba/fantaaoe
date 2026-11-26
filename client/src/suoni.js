@@ -194,6 +194,58 @@ export function suonoAggiudicato() {
   })
 }
 
+// Pietra del trabucco in volo (NuvolaElmo): un fischio che scende per tutta la durata del volo
+export function suonoFischio(durata = 1.1) {
+  if (!audioAttivo.value) return
+  const c = ottieniCtx()
+  if (!c) return
+  const now = c.currentTime
+  const osc = c.createOscillator()
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(1500, now)
+  osc.frequency.exponentialRampToValueAtTime(420, now + durata)
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.0001, now)
+  g.gain.linearRampToValueAtTime(0.03 * scalaGain(), now + durata * 0.6)
+  g.gain.exponentialRampToValueAtTime(0.0001, now + durata)
+  osc.connect(g).connect(c.destination)
+  osc.start(now)
+  osc.stop(now + durata + 0.05)
+}
+
+// La pietra colpisce: un tonfo basso e un soffio di detriti (rumore filtrato)
+export function suonoImpatto() {
+  if (!audioAttivo.value) return
+  const c = ottieniCtx()
+  if (!c) return
+  const now = c.currentTime
+  const vol = scalaGain()
+  const osc = c.createOscillator()
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(95, now)
+  osc.frequency.exponentialRampToValueAtTime(32, now + 0.45)
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.5 * vol, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.5)
+  osc.connect(g).connect(c.destination)
+  osc.start(now)
+  osc.stop(now + 0.55)
+  const n = Math.floor(c.sampleRate * 0.5)
+  const buf = c.createBuffer(1, n, c.sampleRate)
+  const dati = buf.getChannelData(0)
+  for (let i = 0; i < n; i++) dati[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2)
+  const rumore = c.createBufferSource()
+  rumore.buffer = buf
+  const filtro = c.createBiquadFilter()
+  filtro.type = 'lowpass'
+  filtro.frequency.setValueAtTime(1800, now)
+  filtro.frequency.exponentialRampToValueAtTime(300, now + 0.45)
+  const gr = c.createGain()
+  gr.gain.setValueAtTime(0.18 * vol, now)
+  rumore.connect(filtro).connect(gr).connect(c.destination)
+  rumore.start(now)
+}
+
 // Colpo di spada sul paladino (PaladinoAoe): un clang metallico corto
 export function suonoColpo() {
   if (!audioAttivo.value) return

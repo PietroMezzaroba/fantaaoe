@@ -3,6 +3,12 @@
  * GiocatoriDisponibili), l'elmo in NuvolaElmo + elmoGpu.js. Solo transform e opacity; con "riduci movimento" base.css
  * azzera tutte le durate, e i passaggi tra pagine non partono nemmeno (main.js). */
 
+/* colori del trabucco sull'elmo (NuvolaElmo.vue): fuoco, brace e pietra */
+:root { --color-fuoco: oklch(72% 0.18 52); --color-fuoco-chiaro: oklch(91% 0.11 88); --color-pietra: oklch(36% 0.02 60); }
+
+/* tela degli effetti del trabucco: sopra i punti, non prende i clic */
+.nuvola .nuvola__effetti { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+
 /* ---------- passaggio tra le pagine (View Transitions API, main.js) ---------- */
 /* la barra in alto e la barra di scorrimento restano ferme: si muove solo il contenuto */
 .barra { view-transition-name: testata; }

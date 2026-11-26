@@ -14,7 +14,8 @@ struct Uniformi {
   puntatore: vec4f, // x, y, attivo, raggio
   cavallo: vec4f,   // x, y, attivo, raggio
   scan: vec4f,      // posizione del piano, attivo, smorzamento, azzera (1 = spostamenti e scie a zero)
-  colori: array<vec4f, 7>, // lo, mid, hi, verde, bianco, rosso, luce (rgb sRGB 0..1, alfa)
+  impatto: vec4f,   // pietra del trabucco: x, y, forza dell'urto (0 = niente), calore (0..1, i punti vicini diventano brace)
+  colori: array<vec4f, 8>, // lo, mid, hi, verde, bianco, rosso, luce, fuoco (rgb sRGB 0..1, alfa)
 }
 
 @group(0) @binding(0) var<uniform> u: Uniformi;
@@ -70,6 +71,16 @@ fn passo(@builtin(global_invocation_id) id: vec3u) {
       d += vec2f(dv.x / dd * 0.8 - 0.5, dv.y / dd * 0.95 - 0.1) * forza * 0.22;
     }
   }
+  // la pietra del trabucco: spinta verso l'esterno dal punto d'impatto, un po' verso l'alto come una zolla che salta
+  if (u.impatto.z > 0.0) {
+    let dv = base - u.impatto.xy;
+    let d2 = dot(dv, dv);
+    let r = 175.0;
+    if (d2 < r * r && d2 > 0.01) {
+      let dd = sqrt(d2);
+      d += vec2f(dv.x / dd, dv.y / dd - 0.25) * (1.0 - dd / r) * u.impatto.z * 0.22;
+    }
+  }
   d *= u.scan.z;
   let pos = base + d;
   var prima = st.zw;
@@ -87,7 +98,13 @@ fn passo(@builtin(global_invocation_id) id: vec3u) {
   else if (u.scan.y > 0.5 && abs(x - u.scan.x) < 38.0) { codice = 6.0; }
   else if (z > 35.0) { codice = 2.0; }
   else if (z > -20.0) { codice = 1.0; }
-  uscita[i] = vec4f(pos, lato, codice);
+  // calore dell'impatto: i punti vicini al colpo diventano brace (parte frazionaria del codice, 0..0,49)
+  var calore = 0.0;
+  if (u.impatto.w > 0.0) {
+    let dist = length(base - u.impatto.xy);
+    calore = clamp(1.0 - dist / 150.0, 0.0, 1.0) * u.impatto.w;
+  }
+  uscita[i] = vec4f(pos, lato, codice + calore * 0.49);
 }
 
 struct Frammento {
@@ -104,12 +121,14 @@ struct Frammento {
 fn vertice(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> Frammento {
   var angoli = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 1.0), vec2f(-1.0, 1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0));
   let o = disegno[i];
-  let codice = u32(o.w);
+  let codice = u32(floor(o.w));
+  let calore = fract(o.w) / 0.49;
   let raggio = o.z * 0.6;
   // i punti del tricolore e quelli accesi dalla scansione hanno un alone tenue
   var alone = 0.0;
   if (codice == 3u || codice == 5u) { alone = 0.55; }
   if (codice == 6u) { alone = 1.0; }
+  alone = max(alone, calore * 0.9);
   let margine = raggio * (1.0 + alone * 2.2) + 1.0;
   let sc = scieLette[i];
   let lung = min(length(sc), 48.0);
@@ -125,7 +144,7 @@ fn vertice(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> Fr
   var f: Frammento;
   f.pos = vec4f(px.x / u.dim.x * 2.0 - 1.0, 1.0 - px.y / u.dim.y * 2.0, 0.0, 1.0);
   f.locale = locale;
-  f.colore = u.colori[codice];
+  f.colore = mix(u.colori[codice], u.colori[7], calore);
   f.misure = vec3f(mezza, raggio, alone);
   return f;
 }
@@ -203,7 +222,7 @@ export async function creaElmoGpu(tela, { n, dati, sparsi, perso }) {
   const bufStato = device.createBuffer({ size: n * 16, usage: usoStorage })
   const bufUscita = device.createBuffer({ size: n * 16, usage: GPUBufferUsage.STORAGE })
   const bufScia = device.createBuffer({ size: n * 8, usage: GPUBufferUsage.STORAGE })
-  const bufUniformi = device.createBuffer({ size: 224, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST })
+  const bufUniformi = device.createBuffer({ size: 256, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST })
 
   const p = new Float32Array(n * 4)
   const s = new Float32Array(n * 4)
@@ -244,7 +263,7 @@ export async function creaElmoGpu(tela, { n, dati, sparsi, perso }) {
     ],
   })
 
-  const uni = new Float32Array(56)
+  const uni = new Float32Array(64)
   const colore = convertitore()
   let azzeraProssimo = true
 
@@ -252,8 +271,8 @@ export async function creaElmoGpu(tela, { n, dati, sparsi, perso }) {
     motore: 'webgpu',
     // colori dai token del tema (getComputedStyle), come nel disegno 2D
     colori(c) {
-      const lista = [colore(c.lo, 0.75), colore(c.mid, 0.9), colore(c.hi), colore(c.verde), colore(c.bianco), colore(c.rosso), colore(c.hi)]
-      lista.forEach((v, k) => uni.set(v, 28 + k * 4))
+      const lista = [colore(c.lo, 0.75), colore(c.mid, 0.9), colore(c.hi), colore(c.verde), colore(c.bianco), colore(c.rosso), colore(c.hi), colore(c.fuoco)]
+      lista.forEach((v, k) => uni.set(v, 32 + k * 4))
     },
     dimensiona(larghezza, altezza, dpr) {
       tela.width = Math.max(1, Math.round(larghezza * dpr))
@@ -271,6 +290,7 @@ export async function creaElmoGpu(tela, { n, dati, sparsi, perso }) {
       uni.set([f.puntatoreX, f.puntatoreY, f.puntatoreAttivo ? 1 : 0, f.raggio], 16)
       uni.set([f.cavalloX, f.cavalloY, f.cavalloAttivo ? 1 : 0, f.raggioCavallo], 20)
       uni.set([f.piano, f.scansioneAttiva ? 1 : 0, 0.93, azzeraProssimo || f.azzera ? 1 : 0], 24)
+      uni.set([f.impattoX ?? 0, f.impattoY ?? 0, f.impattoForza ?? 0, f.impattoCalore ?? 0], 28)
       azzeraProssimo = false
       device.queue.writeBuffer(bufUniformi, 0, uni)
 

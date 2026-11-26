@@ -8,7 +8,7 @@
 // Motore: WebGPU dove c'è (fisica dei punti in un compute shader, punti tondi e scie quando corrono, elmoGpu.js);
 // altrimenti il disegno 2D di sempre. Se la GPU si perde a metà, la tela si ricrea e si passa al 2D.
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { suonoRilancio } from '../suoni.js'
+import { suonoRilancio, suonoFischio, suonoImpatto } from '../suoni.js'
 import { creaElmoGpu } from '../elmoGpu.js'
 
 // centroX: dove sta l'elmo in larghezza (0..1); quota: quanta larghezza può occupare
@@ -21,6 +21,7 @@ const props = defineProps({
 })
 
 const tela = ref(null)
+const telaEffetti = ref(null) // pietra del trabucco, scia, onda e scintille (2D, sopra i punti)
 const contenitore = ref(null)
 const paladinoEl = ref(null)
 const inPausa = ref(false)
@@ -46,6 +47,130 @@ let inizio = 0
 // Carica del Paladino di AoE2 DE (profilo laterale dir 6) a velocità realistica (~135 px/s)
 const carica = { attiva: false, inizio: 0, durata: 5.2, prossimo: 2.8, suonato: false }
 
+// Trabucco: ogni tanto (e a ogni clic) una pietra infuocata arriva da fuori, in alto a destra, e cade sull'elmo.
+// All'impatto i punti saltano via (spinta nel motore) e quelli vicini diventano brace per un attimo.
+const PIETRA_VOLO = 1150 // ms
+const URTO = 260 // ms: quanto dura la spinta sui punti
+const CALORE = 1300 // ms: quanto restano accese le braci
+const trabucco = { pietre: [], braci: [], onde: [], impatto: null, prossimo: 7.5 }
+let cfx = null
+
+function lanciaPietra(ora, x, y) {
+  if (ridotto || congelata.value || !larghezza) return
+  // bersaglio: dove si è cliccato, oppure un punto a caso sull'elmo
+  const lw = 1550 * Math.min((larghezza * props.quota) / 1550, altezza / 1300)
+  const lh = 1300 * Math.min((larghezza * props.quota) / 1550, altezza / 1300)
+  const tx = x ?? larghezza * props.centroX + (Math.random() - 0.5) * lw * 0.55
+  const ty = y ?? altezza * 0.5 + (Math.random() - 0.4) * lh * 0.45
+  const sx = larghezza + 60 + Math.random() * 80
+  const sy = -80 - Math.random() * 60
+  trabucco.pietre.push({ inizio: ora, sx, sy, tx, ty, cx: (sx + tx) / 2 + 40, cy: Math.min(sy, ty) - altezza * 0.35, rot: Math.random() * 6 })
+  trabucco.prossimo = (ora - inizio) / 1000 + 11 + Math.random() * 6
+  suonoFischio(PIETRA_VOLO / 1000)
+}
+
+function bezier(p, t) {
+  const u = 1 - t
+  return [u * u * p.sx + 2 * u * t * p.cx + t * t * p.tx, u * u * p.sy + 2 * u * t * p.cy + t * t * p.ty]
+}
+
+// fa avanzare pietre, braci e onde; restituisce l'impatto in corso per il motore dei punti
+function aggiornaTrabucco(ora, dt) {
+  for (const p of trabucco.pietre) {
+    const t = Math.min(1, (ora - p.inizio) / PIETRA_VOLO)
+    const [x, y] = bezier(p, t)
+    p.x = x; p.y = y; p.t = t
+    p.rot += dt * 0.012
+    // scia di fuoco e fumo dietro la pietra
+    for (let k = 0; k < 2; k++) {
+      trabucco.braci.push({ x: x + (Math.random() - 0.5) * 6, y: y + (Math.random() - 0.5) * 6, vx: (Math.random() - 0.5) * 0.03, vy: -0.02 - Math.random() * 0.03,
+        vita: 1, durata: 380 + Math.random() * 380, r: 3 + Math.random() * 4, fumo: Math.random() < 0.35 })
+    }
+    if (t >= 1) {
+      p.finita = true
+      trabucco.impatto = { x: p.tx, y: p.ty, inizio: ora }
+      trabucco.onde.push({ x: p.tx, y: p.ty, inizio: ora })
+      for (let k = 0; k < 34; k++) {
+        const a = Math.random() * Math.PI * 2, v = 0.12 + Math.random() * 0.32
+        trabucco.braci.push({ x: p.tx, y: p.ty, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 0.12, g: 0.0006,
+          vita: 1, durata: 500 + Math.random() * 700, r: 1.5 + Math.random() * 2.5, fumo: false })
+      }
+      suonoImpatto()
+    }
+  }
+  trabucco.pietre = trabucco.pietre.filter((p) => !p.finita)
+  for (const b of trabucco.braci) {
+    b.x += b.vx * dt; b.y += b.vy * dt
+    if (b.g) b.vy += b.g * dt
+    b.vita -= dt / b.durata
+  }
+  trabucco.braci = trabucco.braci.filter((b) => b.vita > 0)
+  trabucco.onde = trabucco.onde.filter((o) => ora - o.inizio < 700)
+  const imp = trabucco.impatto
+  if (!imp) return null
+  const passato = ora - imp.inizio
+  if (passato > CALORE) { trabucco.impatto = null; return null }
+  return { x: imp.x, y: imp.y, forza: passato < URTO ? 190 * (1 - passato / URTO) : 0, calore: Math.pow(1 - passato / CALORE, 1.5) }
+}
+
+function disegnaTrabucco(ora) {
+  if (!cfx) return
+  cfx.clearRect(0, 0, larghezza, altezza)
+  // onde d'urto: un anello che si allarga e sbiadisce
+  for (const o of trabucco.onde) {
+    const t = (ora - o.inizio) / 700
+    cfx.globalAlpha = (1 - t) * 0.7
+    cfx.strokeStyle = colori.fuoco
+    cfx.lineWidth = 3 * (1 - t) + 0.5
+    cfx.beginPath()
+    cfx.ellipse(o.x, o.y, 20 + t * 150, (20 + t * 150) * 0.55, 0, 0, Math.PI * 2)
+    cfx.stroke()
+    // lampo al centro, solo nei primi istanti
+    if (t < 0.25) {
+      const g = cfx.createRadialGradient(o.x, o.y, 0, o.x, o.y, 90)
+      g.addColorStop(0, colori.fuocoChiaro)
+      g.addColorStop(1, 'transparent')
+      cfx.globalAlpha = (1 - t / 0.25) * 0.8
+      cfx.fillStyle = g
+      cfx.fillRect(o.x - 90, o.y - 90, 180, 180)
+    }
+  }
+  // braci e fumo
+  for (const b of trabucco.braci) {
+    cfx.globalAlpha = Math.max(0, b.vita) * (b.fumo ? 0.35 : 0.9)
+    cfx.fillStyle = b.fumo ? colori.fumo : b.vita > 0.5 ? colori.fuocoChiaro : colori.fuoco
+    cfx.beginPath()
+    cfx.arc(b.x, b.y, b.fumo ? b.r * (1.6 - b.vita) : b.r * b.vita + 0.4, 0, Math.PI * 2)
+    cfx.fill()
+  }
+  // la pietra: un sasso scuro con il cuore che brucia
+  for (const p of trabucco.pietre) {
+    if (p.x == null) continue
+    const r = 9 + p.t * 5
+    const g = cfx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 2.6)
+    g.addColorStop(0, colori.fuocoChiaro)
+    g.addColorStop(0.35, colori.fuoco)
+    g.addColorStop(1, 'transparent')
+    cfx.globalAlpha = 0.85
+    cfx.fillStyle = g
+    cfx.fillRect(p.x - r * 2.6, p.y - r * 2.6, r * 5.2, r * 5.2)
+    cfx.globalAlpha = 1
+    cfx.save()
+    cfx.translate(p.x, p.y)
+    cfx.rotate(p.rot)
+    cfx.fillStyle = colori.pietra
+    cfx.beginPath()
+    for (let k = 0; k < 7; k++) {
+      const a = (k / 7) * Math.PI * 2, rr = r * (0.78 + ((k * 37) % 5) / 18)
+      k ? cfx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : cfx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr)
+    }
+    cfx.closePath()
+    cfx.fill()
+    cfx.restore()
+  }
+  cfx.globalAlpha = 1
+}
+
 function lanciaCarica(ora) {
   if (ridotto || congelata.value) return
   carica.attiva = true
@@ -61,6 +186,7 @@ function leggiColori() {
   colori = {
     lo: v('--point-mid'), mid: v('--color-ink-2'), hi: v('--point-hi'),
     verde: v('--color-accent'), bianco: v('--color-ink'), rosso: v('--color-error'),
+    fuoco: v('--color-fuoco'), fuocoChiaro: v('--color-fuoco-chiaro'), fumo: v('--color-muted'), pietra: v('--color-pietra'),
   }
   gpu?.colori(colori)
 }
@@ -71,6 +197,12 @@ function dimensiona() {
   dpr = Math.min(2, window.devicePixelRatio || 1)
   larghezza = r.width
   altezza = r.height
+  if (telaEffetti.value) {
+    telaEffetti.value.width = Math.round(larghezza * dpr)
+    telaEffetti.value.height = Math.round(altezza * dpr)
+    cfx = telaEffetti.value.getContext('2d')
+    cfx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  }
   if (gpu) {
     gpu.dimensiona(larghezza, altezza, dpr)
   } else if (ctx) {
@@ -163,6 +295,11 @@ function disegna(ora) {
     paladinoEl.value.style.opacity = '0'
   }
 
+  // trabucco: prima pietra qualche secondo dopo l'ingresso, poi ogni 11-17 s, mai mentre passa il paladino
+  if (!fermo && arrivo >= 1 && !carica.attiva && t >= trabucco.prossimo) lanciaPietra(ora)
+  const imp = fermo ? null : aggiornaTrabucco(ora, dt)
+  disegnaTrabucco(ora)
+
   const raggio = 110, raggio2 = raggio * raggio
   const rCav = 165, rCav2 = rCav * rCav
 
@@ -173,6 +310,7 @@ function disegna(ora) {
       puntatoreX: puntatore.x, puntatoreY: puntatore.y, puntatoreAttivo: puntatore.attivo && !ridotto && !congelata.value, raggio,
       cavalloX: cavX, cavalloY: cavY, cavalloAttivo: cavAttivo && !ridotto, raggioCavallo: rCav,
       piano, scansioneAttiva, azzera: congelata.value,
+      impattoX: imp?.x, impattoY: imp?.y, impattoForza: imp?.forza, impattoCalore: imp?.calore,
     })
     if (!ridotto && !congelata.value && visibile && !document.hidden) raf = requestAnimationFrame(disegna)
     else ultimoFotogramma = 0
@@ -219,6 +357,17 @@ function disegna(ora) {
         const forza = (1 - d / rCav) * 72
         spostX[i] += ((dx / d) * 0.8 - 0.5) * forza * 0.22
         spostY[i] += ((dy / d) * 0.95 - 0.1) * forza * 0.22
+      }
+    }
+    // la pietra del trabucco spinge via i punti vicini
+    if (imp?.forza) {
+      const dx = sxp - imp.x, dy = syp - imp.y
+      const d2 = dx * dx + dy * dy
+      if (d2 < 30625 && d2 > 0.01) {
+        const d = Math.sqrt(d2)
+        const forza = (1 - d / 175) * imp.forza * 0.22
+        spostX[i] += (dx / d) * forza
+        spostY[i] += (dy / d - 0.25) * forza
       }
     }
     spostX[i] *= 0.93
@@ -275,6 +424,11 @@ function esci() {
 // azzera quello che era in corso: carica del Paladino, passaggio automatico, punti spostati
 function azzera() {
   carica.attiva = false
+  trabucco.pietre = []
+  trabucco.braci = []
+  trabucco.onde = []
+  trabucco.impatto = null
+  cfx?.clearRect(0, 0, larghezza, altezza)
   puntatore.attivo = false
   spostX?.fill(0)
   spostY?.fill(0)
@@ -282,8 +436,9 @@ function azzera() {
 }
 
 // un clic sull'elmo fa partire subito la carica del Paladino
-function clic() {
-  lanciaCarica(performance.now())
+function clic(e) {
+  const r = contenitore.value.getBoundingClientRect()
+  lanciaPietra(performance.now(), e.clientX - r.left, e.clientY - r.top)
   avvia()
 }
 
@@ -291,6 +446,7 @@ function clic() {
 function riprendi() {
   carica.prossimo = (performance.now() - inizio) / 1000 + 2.8
   ultimoMovimento = performance.now()
+  trabucco.prossimo = (performance.now() - inizio) / 1000 + 6
 }
 
 function pausa() {
@@ -412,6 +568,7 @@ onBeforeUnmount(() => {
       width="128"
       height="124"
     />
+    <canvas ref="telaEffetti" class="nuvola__effetti" aria-hidden="true" />
     <canvas :key="chiaveTela" ref="tela" role="img" aria-label="L'elmo di Age of Empires Italia disegnato con migliaia di punti, che si inclina seguendo il puntatore" />
     <button
       v-if="pronto && animata !== false"
