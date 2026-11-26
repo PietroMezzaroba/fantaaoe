@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Radice from './Radice.vue'
 import './stile.css'
 import { applicaTemaIniziale } from './tema.js'
+import { api } from './api.js'
 
 import Landing from './pagine/Landing.vue'
 import Casa from './pagine/Casa.vue'
@@ -17,6 +18,7 @@ import ProfiloUtente from './pagine/ProfiloUtente.vue'
 import Admin from './pagine/Admin.vue'
 import Asta from './pagine/Asta.vue'
 import AstaCapitano from './pagine/AstaCapitano.vue'
+import AstaGestione from './pagine/AstaGestione.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -28,6 +30,7 @@ const router = createRouter({
     { path: '/admin', component: Admin, meta: { titolo: 'Admin, FantaAge', pieno: true } },
     { path: '/asta', component: Asta, meta: { titolo: 'Asta, FantaAge' } },
     { path: '/asta/inizia', component: AstaCapitano, meta: { titolo: "Inizia l'asta, FantaAge", pieno: true } },
+    { path: '/asta/gestisci', component: AstaGestione, meta: { titolo: "Gestisci l'asta, FantaAge", pieno: true } },
     { path: '/torneo', component: Torneo, meta: { titolo: 'Torneo 2026, FantaAge' } },
     { path: '/classifica', component: Classifica, meta: { titolo: 'Classifica, FantaAge' } },
     { path: '/giocatore/:id', component: Giocatore, props: true },
@@ -37,6 +40,16 @@ const router = createRouter({
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
   scrollBehavior: (to, from, salvata) => salvata || (to.path === from.path ? false : { top: 0 }),
+})
+
+// "Inizia l'asta" si può raggiungere solo ad asta attiva (stato_globale_asta = 'asta attiva'); altrimenti si torna alla home
+router.beforeEach(async (to) => {
+  if (to.path !== '/asta/inizia') return true
+  try {
+    return (await api('asta/stato')).attiva ? true : '/'
+  } catch {
+    return '/'
+  }
 })
 
 router.afterEach((to) => {

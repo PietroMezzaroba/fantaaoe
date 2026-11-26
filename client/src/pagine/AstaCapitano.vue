@@ -12,7 +12,7 @@ import PuntateCapitani from '../componenti/PuntateCapitani.vue'
     </section>
     <section class="asta-capitano__meta" aria-label="Giocatori">
       <div class="asta-capitano__disponibili">
-        <GiocatoriDisponibili />
+        <GiocatoriDisponibili chiamabile />
       </div>
       <div class="asta-capitano__puntate">
         <PuntateCapitani />

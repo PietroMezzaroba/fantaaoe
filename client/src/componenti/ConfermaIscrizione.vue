@@ -2,7 +2,7 @@
 // Piccola form al centro dello schermo che chiede conferma dell'iscrizione al torneo.
 // "No" chiude; "Sì" crea l'iscrizione (un solo record per utente in utenti_iscritti).
 import { ref, watch, nextTick } from 'vue'
-import { apiPost } from '../api.js'
+import { api, apiPost } from '../api.js'
 
 const props = defineProps({ aperta: Boolean })
 const emit = defineEmits(['chiudi'])
@@ -11,6 +11,9 @@ const bottoneSi = ref(null)
 const invio = ref(false)
 const errore = ref('')
 const fatto = ref(false)
+const verifica = ref(false) // controllo iniziale in corso
+const chiuse = ref(false) // iscrizioni disattive
+const giaIscritto = ref(false)
 
 async function conferma() {
   invio.value = true
@@ -29,6 +32,19 @@ watch(() => props.aperta, async (aperta) => {
   if (!aperta) return
   errore.value = ''
   fatto.value = false
+  chiuse.value = false
+  giaIscritto.value = false
+  // prima di chiedere conferma si controlla se le iscrizioni sono aperte e se l'utente non è già iscritto
+  verifica.value = true
+  try {
+    const stato = await api('profilo/iscrizione')
+    chiuse.value = !stato.aperte
+    giaIscritto.value = stato.giaIscritto
+  } catch (e) {
+    errore.value = e.message
+  } finally {
+    verifica.value = false
+  }
   await nextTick()
   bottoneSi.value?.focus()
 })
@@ -38,16 +54,19 @@ watch(() => props.aperta, async (aperta) => {
   <div v-if="aperta" class="conferma-velo" @click.self="emit('chiudi')" @keydown.esc="emit('chiudi')">
     <div class="conferma" role="dialog" aria-modal="true" aria-labelledby="conferma-titolo">
       <h2 id="conferma-titolo">Iscrizione al torneo</h2>
-      <p v-if="fatto">Iscrizione registrata! Sarà verificata a breve.</p>
+      <p v-if="verifica" class="conferma__attesa">Controllo in corso…</p>
+      <p v-else-if="chiuse">Le iscrizioni al Fanta Age sono disattive.</p>
+      <p v-else-if="giaIscritto">Sei già iscritto al Fanta Age.</p>
+      <p v-else-if="fatto">Iscrizione registrata! Sarà verificata a breve.</p>
       <p v-else>Vuoi confermare la tua iscrizione al FantaAge?</p>
       <p v-if="errore" class="conferma__errore" role="alert">{{ errore }}</p>
       <div class="conferma__azioni">
-        <template v-if="fatto">
-          <button type="button" class="btn" @click="emit('chiudi')">Chiudi</button>
+        <template v-if="fatto || chiuse || giaIscritto">
+          <button type="button" class="btn" :disabled="verifica" @click="emit('chiudi')">Chiudi</button>
         </template>
         <template v-else>
           <button type="button" class="btn btn--linea" :disabled="invio" @click="emit('chiudi')">No</button>
-          <button ref="bottoneSi" type="button" class="btn" :disabled="invio" @click="conferma">Sì</button>
+          <button ref="bottoneSi" type="button" class="btn" :disabled="invio || verifica" @click="conferma">Sì</button>
         </template>
       </div>
     </div>

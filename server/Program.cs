@@ -85,6 +85,15 @@ public class Program
             });
         }
         builder.Services.AddAuthorization();
+        // un collegamento caduto di colpo (browser chiuso, rete spenta) viene rilevato in pochi secondi: ping ogni 5 s, scaduto dopo 15 s
+        builder.Services.AddSignalR(o =>
+        {
+            o.KeepAliveInterval = TimeSpan.FromSeconds(5);
+            o.ClientTimeoutInterval = TimeSpan.FromSeconds(15);
+        });
+        builder.Services.AddSingleton<PresenzeAsta>();
+        builder.Services.AddSingleton<TimerAsta>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<TimerAsta>());
 
         var app = builder.Build();
 
@@ -116,6 +125,7 @@ public class Program
         app.UseOutputCache();
 
         app.MapControllers();
+        app.MapHub<AstaHub>(AstaHub.Percorso);
 
         // una rotta /api che non esiste è un 404 in JSON (non la pagina della SPA, che il client scambierebbe per dati)
         app.MapFallback("/api/{**percorso}", (HttpContext c) =>

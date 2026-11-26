@@ -1,11 +1,21 @@
 <script setup>
 // Pagina dell'asta: pulsanti d'accesso (per ruolo) e finestre delle squadre.
-import { computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { api } from '../api.js'
 import { sessione } from '../sessione.js'
 import FinestreSquadre from '../componenti/FinestreSquadre.vue'
 
 // chi vede quale pulsante: capitani -> "Inizia l'asta", streamer -> "Gestisci l'asta" (solo il ruolo esatto, admin escluso)
-const eCapitano = computed(() => sessione.autenticato && sessione.ruoli.includes('capitano'))
+// il pulsante "Inizia l'asta" compare solo ad asta attiva (stato_globale_asta = 'asta attiva')
+const astaAttiva = ref(false)
+onMounted(async () => {
+  try {
+    astaAttiva.value = (await api('asta/stato')).attiva
+  } catch {
+    astaAttiva.value = false
+  }
+})
+const eCapitano = computed(() => astaAttiva.value && sessione.autenticato && sessione.ruoli.includes('capitano'))
 const eStreamer = computed(() => sessione.autenticato && sessione.ruoli.includes('streamer'))
 </script>
 
@@ -16,7 +26,7 @@ const eStreamer = computed(() => sessione.autenticato && sessione.ruoli.includes
 
   <div v-if="eCapitano || eStreamer" class="azioni-asta">
     <RouterLink v-if="eCapitano" to="/asta/inizia" class="btn azioni-asta__btn">Inizia l'asta</RouterLink>
-    <button v-if="eStreamer" type="button" class="btn azioni-asta__btn">Gestisci l'asta</button>
+    <RouterLink v-if="eStreamer" to="/asta/gestisci" class="btn azioni-asta__btn">Gestisci l'asta</RouterLink>
   </div>
 
 

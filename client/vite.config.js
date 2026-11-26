@@ -7,6 +7,7 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     proxy: {
+      '/hubs': { target: process.env.API_URL || 'http://localhost:59173', changeOrigin: true, ws: true }, // SignalR (asta in tempo reale)
       '/api': { target: process.env.API_URL || 'http://localhost:59173', changeOrigin: true },
     },
   },

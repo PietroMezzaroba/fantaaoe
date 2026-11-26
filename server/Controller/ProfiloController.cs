@@ -88,6 +88,24 @@ public class ProfiloController : ControllerBase
         return Results.Ok(new { legame, giocatore, civ, iscrizione });
     }
 
+    // Le iscrizioni sono aperte solo quando configurazioni.stato_globale_asta vale 'iscrizione'
+    private static async Task<bool> IscrizioniAperte(NpgsqlConnection c) =>
+        await c.ExecuteScalarAsync<string?>("select valore from fanta_torneo.configurazioni where chiave = 'stato_globale_asta'") == "iscrizione";
+
+    // Stato dell'iscrizione per l'utente connesso: iscrizioni aperte? sono già iscritto?
+    [HttpGet("/api/profilo/iscrizione")]
+    public async Task<IResult> StatoIscrizione()
+    {
+        if (db is null) return Results.Problem("Database non configurato", statusCode: 503);
+        if (!EAutenticato(User)) return Results.Unauthorized();
+        var did = DiscordId(User)!;
+
+        await using var c = await db.OpenConnectionAsync();
+        var aperte = await IscrizioniAperte(c);
+        var giaIscritto = await c.ExecuteScalarAsync<bool>("select exists(select 1 from fanta_torneo.utenti_iscritti where id_discord = @did)", new { did });
+        return Results.Ok(new { aperte, giaIscritto });
+    }
+
     // L'utente conferma la propria iscrizione: un solo record per utente in utenti_iscritti
     [HttpPost("/api/profilo/iscriviti")]
     public async Task<IResult> Iscriviti()
@@ -98,6 +116,8 @@ public class ProfiloController : ControllerBase
         await RegistraUtenteDiscord(db, User);
 
         await using var c = await db.OpenConnectionAsync();
+        if (!await IscrizioniAperte(c))
+            return Results.Json(new { errore = "Le iscrizioni al Fanta Age sono disattive." }, statusCode: 403);
         var nick = NomeUtente(User);
         var inserite = await c.ExecuteAsync("""
             insert into fanta_torneo.utenti_iscritti (id_discord, id_squadra, nickname, fascia, seeding)
