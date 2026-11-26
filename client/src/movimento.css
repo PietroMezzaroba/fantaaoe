@@ -1,0 +1,36 @@
+/* Hallmark · movimento (redesign: restyle, solo movimento) · 2026-11-26
+ * Il movimento comune a tutto il sito. Quello dell'asta sta nei suoi componenti (PuntateCapitani, FinestreSquadre,
+ * GiocatoriDisponibili), l'elmo in NuvolaElmo + elmoGpu.js. Solo transform e opacity; con "riduci movimento" base.css
+ * azzera tutte le durate, e i passaggi tra pagine non partono nemmeno (main.js). */
+
+/* ---------- passaggio tra le pagine (View Transitions API, main.js) ---------- */
+/* la barra in alto e la barra di scorrimento restano ferme: si muove solo il contenuto */
+.barra { view-transition-name: testata; }
+.barra-scroll { view-transition-name: scorrimento; }
+
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root) { animation: pagina-esce var(--dur-short) var(--ease-in) both; }
+  ::view-transition-new(root) { animation: pagina-entra var(--dur-long) var(--ease-out) both; }
+  /* la testata vecchia e nuova sono uguali: nessuna dissolvenza, così non lampeggia */
+  ::view-transition-old(testata), ::view-transition-new(testata),
+  ::view-transition-old(scorrimento), ::view-transition-new(scorrimento) { animation: none; }
+}
+@keyframes pagina-esce { to { opacity: 0; transform: translateY(-4px); } }
+@keyframes pagina-entra { from { opacity: 0; transform: translateY(10px); } }
+
+/* ---------- landing: le barre delle settimane crescono mentre la sezione entra nello schermo ---------- */
+/* legate allo scorrimento (animation-timeline): senza supporto o con "riduci movimento" le barre sono già lì */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .settimane__barra {
+      transform-box: fill-box; transform-origin: 50% 100%;
+      animation: barra-cresce linear both;
+      animation-timeline: view();
+      animation-range: entry calc(10% + var(--i, 0) * 1.5%) cover calc(32% + var(--i, 0) * 1.5%);
+    }
+  }
+}
+@keyframes barra-cresce { from { transform: scaleY(0.04); } to { transform: scaleY(1); } }
+
+/* i numeri che scorrono non cambiano larghezza mentre contano */
+.numero-vivo { font-variant-numeric: tabular-nums; }

@@ -19,7 +19,7 @@ export const sessione = reactive({
   impostazioni: null, // { audioAttivo, layoutScuro, cursore, animazioneIniziale } salvate nel database, solo da connessi
 })
 
-export const impostazioniPredefinite = { audioAttivo: true, layoutScuro: true, cursore: 'accattivante', animazioneIniziale: true }
+export const impostazioniPredefinite = { audioAttivo: true, layoutScuro: true, cursore: 'classico', animazioneIniziale: true }
 
 export async function caricaSessione() {
   try {

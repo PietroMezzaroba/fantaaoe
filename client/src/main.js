@@ -1,7 +1,8 @@
-import { createApp } from 'vue'
+import { createApp, nextTick } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import Radice from './Radice.vue'
 import './stile.css'
+import './movimento.css'
 import { applicaTemaIniziale } from './tema.js'
 import { api } from './api.js'
 
@@ -54,6 +55,33 @@ router.beforeEach(async (to) => {
 
 router.afterEach((to) => {
   if (to.meta.titolo) document.title = to.meta.titolo
+})
+
+// Passaggio tra le pagine con la View Transitions API: la pagina vecchia esce e la nuova entra (movimento.css),
+// la barra in alto resta ferma. Dove il browser non la ha, o con "riduci movimento", il cambio è secco come prima.
+let chiudiPassaggio = null
+router.beforeResolve((to, from) => {
+  if (!document.startViewTransition || from.matched.length === 0 || to.path === from.path) return
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  return new Promise((pronta) => {
+    const passaggio = document.startViewTransition(() => new Promise((fatto) => {
+      chiudiPassaggio = fatto
+      pronta()
+    }))
+    // se il passaggio salta (scheda nascosta, errore) la navigazione va avanti lo stesso
+    passaggio.ready.catch(() => {})
+    passaggio.finished.catch(() => {})
+  })
+})
+router.afterEach(async () => {
+  if (!chiudiPassaggio) return
+  await nextTick()
+  chiudiPassaggio()
+  chiudiPassaggio = null
+})
+router.onError(() => {
+  chiudiPassaggio?.()
+  chiudiPassaggio = null
 })
 
 applicaTemaIniziale()
