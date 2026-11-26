@@ -4,6 +4,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { api, apiPost } from '../api.js'
 import StatoDati from './StatoDati.vue'
 import FinestraModale from './FinestraModale.vue'
+import NumeroVivo from './NumeroVivo.vue'
 import { sessione } from '../sessione.js'
 import { ascoltaAsta, presenzaPagina } from '../astaLive.js'
 
@@ -117,6 +118,21 @@ const timerTesto = computed(() => {
   return `${String(secondi).padStart(2, '0')}:${String(centesimi).padStart(2, '0')}`
 })
 const timerInScadenza = computed(() => timerAttivo.value && !inPausa.value && restanteMs.value < 10000)
+
+// anello del timer: si svuota col tempo. La durata piena non arriva dal server: è quella che il timer aveva
+// quando è ripartito (a ogni chiamata e a ogni offerta si riporta a timer_asta_secondi)
+// aveva quando è ripartito, cioè la più lunga vista (dopo una pausa riparte dal residuo, che è più corto)
+const durataMs = ref(0)
+watch(scadenzaMs, (v) => {
+  const r = v ? v - (Date.now() + scarto.value) : 0
+  if (r > durataMs.value) durataMs.value = r
+})
+const CIRCONFERENZA = 2 * Math.PI * 21
+const anelloScarto = computed(() => {
+  if (!timerAttivo.value) return CIRCONFERENZA
+  const resto = durataMs.value ? Math.min(1, Math.max(0, restanteMs.value / durataMs.value)) : 1
+  return CIRCONFERENZA * (1 - resto)
+})
 
 // Riquadro "stato dell'asta": in cima, se tocca a un capitano chiamare, di chi è il turno; poi i fatti recenti
 const ora = (quando) => new Date(quando).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -240,7 +256,9 @@ const spazi = (c) => {
             <span class="puntate__testo">{{ c.nome }}</span>
             <span v-if="c.idCapitano === idChiamante" class="puntate__stella" role="img" :aria-label="motivoStella" :title="motivoStella">★</span>
           </span>
-          <span v-for="(s, i) in spazi(c)" :key="i" class="puntate__spazio" :class="{ vuoto: s.valore === null, migliore: s.rosso }">{{ s.valore }}</span>
+          <TransitionGroup name="puntata">
+            <span v-for="(s, i) in spazi(c)" :key="`${i}-${s.valore}`" class="puntate__spazio" :class="{ vuoto: s.valore === null, migliore: s.rosso }">{{ s.valore }}</span>
+          </TransitionGroup>
         </li>
       </ul>
       <div class="puntate__riepilogo">
@@ -249,13 +267,18 @@ const spazi = (c) => {
           {{ giocatoreInAsta || '—' }}
           <span v-if="giocatoreInAsta" class="puntate__elo" title="ELO">ELO {{ eloGiocatore }}</span>
         </dd></div>
-        <div><dt>Puntata massima:</dt><dd>{{ puntataMassima }}</dd></div>
+        <div><dt>Puntata massima:</dt><dd><NumeroVivo :valore="puntataMassima" :durata="400" /></dd></div>
       </dl>
       <div class="puntate__timer" :class="{ attivo: timerAttivo, urgente: timerInScadenza, pausa: inPausa }" role="timer" aria-label="Tempo rimasto">
-        <svg class="puntate__timer-icona" viewBox="0 0 24 24" width="1.6em" height="1.6em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="13.5" r="7.5" />
-          <path d="M12 9.5v4l2.5 2" />
-          <path d="M9.5 2.5h5M12 2.5v3.5M18.5 6.5l1.5-1.5" />
+        <svg class="puntate__timer-anello" viewBox="0 0 48 48" width="2.2em" height="2.2em" aria-hidden="true">
+          <circle class="puntate__timer-traccia" cx="24" cy="24" r="21" />
+          <circle
+            class="puntate__timer-resto"
+            cx="24" cy="24" r="21"
+            :stroke-dasharray="CIRCONFERENZA"
+            :stroke-dashoffset="anelloScarto"
+            transform="rotate(-90 24 24)"
+          />
         </svg>
         <span class="puntate__timer-testo">{{ timerTesto }}</span>
       </div>
@@ -300,13 +323,13 @@ const spazi = (c) => {
       </div>
       <div class="puntate__fatti" aria-labelledby="fatti-titolo">
         <p id="fatti-titolo" class="puntate__etichetta">Stato dell'asta</p>
-        <ul class="puntate__fatti-elenco" aria-live="polite">
+        <TransitionGroup tag="ul" name="fatto" class="puntate__fatti-elenco" aria-live="polite">
           <li v-for="m in messaggi" :key="m.chiave" :class="[m.tipo, { evidenza: m.evidenza }]">
             <span>{{ m.testo }}</span>
             <time v-if="m.quando">{{ m.quando }}</time>
           </li>
-          <li v-if="!messaggi.length" class="vuoto">Nessuna attività per ora.</li>
-        </ul>
+          <li v-if="!messaggi.length" key="vuoto" class="vuoto">Nessuna attività per ora.</li>
+        </TransitionGroup>
       </div>
     </StatoDati>
   </section>
@@ -390,4 +413,31 @@ const spazi = (c) => {
 /* la puntata più alta: ultima puntata del capitano che la detiene */
 .puntate__spazio.migliore { background: oklch(58% 0.2 25); border-color: oklch(48% 0.2 25); color: white; font-weight: 700; }
 .puntate__spazio.vuoto { border-style: dashed; background: transparent; }
+
+/* ---------- movimento ---------- */
+/* la puntata rossa passa da una casella all'altra sfumando */
+.puntate__spazio { transition: background-color var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out); }
+/* una puntata nuova entra con un piccolo scatto (le caselle vuote spariscono subito) */
+.puntata-enter-active { transition: transform var(--dur-long) var(--ease-out); }
+.puntata-enter-from { transform: scale(0.55); }
+/* i fatti nuovi scendono dall'alto, gli altri scivolano sotto */
+.fatto-enter-active { transition: transform var(--dur-long) var(--ease-out); }
+.fatto-enter-from { transform: translateY(-8px); }
+.fatto-move { transition: transform var(--dur-long) var(--ease-out); }
+/* il cerchio di chi si collega fa un'onda, una volta */
+.puntate__presenza { position: relative; transition: background-color var(--dur-short) var(--ease-out); }
+.puntate__presenza.on::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--color-accent); opacity: 0; animation: presenza-onda 900ms var(--ease-out) 1;
+}
+@keyframes presenza-onda { from { opacity: 0.9; transform: scale(1); } to { opacity: 0; transform: scale(2.4); } }
+/* anello del timer: la traccia e il tempo che resta */
+.puntate__timer-anello { flex: 0 0 auto; }
+.puntate__timer-traccia, .puntate__timer-resto { fill: none; stroke-width: 4; }
+.puntate__timer-traccia { stroke: var(--color-rule-2); }
+.puntate__timer-resto { stroke: currentColor; stroke-linecap: round; }
+.puntate__timer:not(.attivo) .puntate__timer-resto { opacity: 0; }
+/* sotto i 10 secondi il numero batte a ogni secondo */
+.puntate__timer.urgente .puntate__timer-testo { animation: timer-batte 1s var(--ease-out) infinite; }
+@keyframes timer-batte { 0% { transform: scale(1.08); } 40%, 100% { transform: scale(1); } }
 </style>

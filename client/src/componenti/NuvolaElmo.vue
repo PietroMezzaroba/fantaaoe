@@ -5,8 +5,11 @@
 // Una scansione lo attraversa ogni sette secondi.
 // Si ferma fuori schermo, con la scheda nascosta, col bottone di pausa e con "riduci movimento".
 // In pausa l'animazione si azzera: l'elmo resta fermo, dritto e ricomposto, senza nessun effetto.
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+// Motore: WebGPU dove c'è (fisica dei punti in un compute shader, punti tondi e scie quando corrono, elmoGpu.js);
+// altrimenti il disegno 2D di sempre. Se la GPU si perde a metà, la tela si ricrea e si passa al 2D.
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { suonoRilancio } from '../suoni.js'
+import { creaElmoGpu } from '../elmoGpu.js'
 
 // centroX: dove sta l'elmo in larghezza (0..1); quota: quanta larghezza può occupare
 // animata: false = l'elmo resta sempre fermo (impostazione del profilo) e il pulsante di pausa non compare;
@@ -26,8 +29,12 @@ const pronto = ref(false)
 const congelata = computed(() => inPausa.value || props.animata === false)
 let datiPronti = false
 
-let ctx, dati, n, raf = 0, visibile = true, ridotto = false
+let ctx, gpu = null, dati, n, raf = 0, visibile = true, ridotto = false
 let larghezza = 0, altezza = 0, dpr = 1
+let ultimoFotogramma = 0
+// cambia quando la GPU si perde: Vue ricrea la tela, che così può avere un contesto 2D
+const chiaveTela = ref(0)
+const motore = ref('')
 let colori = {}
 let spostX, spostY, sparsi
 let ultimoMovimento = -1e9
@@ -55,24 +62,34 @@ function leggiColori() {
     lo: v('--point-mid'), mid: v('--color-ink-2'), hi: v('--point-hi'),
     verde: v('--color-accent'), bianco: v('--color-ink'), rosso: v('--color-error'),
   }
+  gpu?.colori(colori)
 }
 
 function dimensiona() {
+  if (!contenitore.value || !tela.value) return
   const r = contenitore.value.getBoundingClientRect()
   dpr = Math.min(2, window.devicePixelRatio || 1)
   larghezza = r.width
   altezza = r.height
-  tela.value.width = Math.round(larghezza * dpr)
-  tela.value.height = Math.round(altezza * dpr)
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  if (gpu) {
+    gpu.dimensiona(larghezza, altezza, dpr)
+  } else if (ctx) {
+    tela.value.width = Math.round(larghezza * dpr)
+    tela.value.height = Math.round(altezza * dpr)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  }
 }
 
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
 
 function disegna(ora) {
   raf = 0
+  if (!gpu && !ctx) return
   const t = (ora - inizio) / 1000
-  ctx.clearRect(0, 0, larghezza, altezza)
+  // durata dell'ultimo fotogramma: la scia è lunga quanto lo spostamento in 1/60 di secondo, a qualunque frequenza dello schermo
+  const dt = ultimoFotogramma ? Math.min(100, Math.max(4, ora - ultimoFotogramma)) : 16.7
+  ultimoFotogramma = ora
+  if (ctx) ctx.clearRect(0, 0, larghezza, altezza)
 
   // vista: ondeggia da sola (ben visibile) + puntatore, smorzata
   const fermo = ridotto || congelata.value
@@ -146,10 +163,24 @@ function disegna(ora) {
     paladinoEl.value.style.opacity = '0'
   }
 
-  const secchi = { lo: [], mid: [], hi: [], verde: [], bianco: [], rosso: [], luce: [] }
-  const p = dati
   const raggio = 110, raggio2 = raggio * raggio
   const rCav = 165, rCav2 = rCav * rCav
+
+  if (gpu) {
+    gpu.disegna({
+      larghezza, altezza, dpr, cy, sy, cx, sx, cg, sg, raccolta, scala, ox, oy, focale: f,
+      scia: fermo ? 0 : Math.min(2, 16.7 / dt),
+      puntatoreX: puntatore.x, puntatoreY: puntatore.y, puntatoreAttivo: puntatore.attivo && !ridotto && !congelata.value, raggio,
+      cavalloX: cavX, cavalloY: cavY, cavalloAttivo: cavAttivo && !ridotto, raggioCavallo: rCav,
+      piano, scansioneAttiva, azzera: congelata.value,
+    })
+    if (!ridotto && !congelata.value && visibile && !document.hidden) raf = requestAnimationFrame(disegna)
+    else ultimoFotogramma = 0
+    return
+  }
+
+  const secchi = { lo: [], mid: [], hi: [], verde: [], bianco: [], rosso: [], luce: [] }
+  const p = dati
 
   for (let i = 0; i < n; i++) {
     const k = i * 4
@@ -215,6 +246,7 @@ function disegna(ora) {
   ctx.globalAlpha = 1
 
   if (!ridotto && !congelata.value && visibile && !document.hidden) raf = requestAnimationFrame(disegna)
+  else ultimoFotogramma = 0
 }
 
 function avvia() {
@@ -246,6 +278,13 @@ function azzera() {
   puntatore.attivo = false
   spostX?.fill(0)
   spostY?.fill(0)
+  gpu?.azzera()
+}
+
+// un clic sull'elmo fa partire subito la carica del Paladino
+function clic() {
+  lanciaCarica(performance.now())
+  avvia()
 }
 
 // alla ripresa si riparte da fermo: niente carica subito, il puntatore automatico aspetta
@@ -284,15 +323,38 @@ function cambiaVisibilita() {
   if (!document.hidden) avvia()
 }
 
-onMounted(async () => {
+// sceglie il motore: WebGPU se c'è, altrimenti 2D; poi colori e misure
+async function preparaMotore() {
+  gpu = await creaElmoGpu(tela.value, { n, dati, sparsi, perso: passaAl2D })
+  if (!gpu) ctx = tela.value.getContext('2d')
+  motore.value = gpu ? 'webgpu' : '2d'
+  leggiColori()
+  dimensiona()
+}
+
+// la GPU si è persa (driver, risparmio energetico): si ricrea la tela e si continua in 2D
+async function passaAl2D() {
+  gpu = null
+  ctx = null
+  chiaveTela.value++
+  await nextTick()
   ctx = tela.value.getContext('2d')
+  motore.value = '2d'
+  leggiColori()
+  dimensiona()
+  avvia()
+}
+
+// il tema chiaro/scuro cambia i colori dei punti
+let osservaTema
+onMounted(async () => {
   mq = window.matchMedia('(prefers-reduced-motion: reduce)')
   ridotto = mq.matches
   mq.addEventListener('change', (e) => { ridotto = e.matches; avvia() })
-  leggiColori()
-  dimensiona()
   ro = new ResizeObserver(() => { dimensiona(); avvia() })
   ro.observe(contenitore.value)
+  osservaTema = new MutationObserver(() => { leggiColori(); avvia() })
+  osservaTema.observe(document.documentElement, { attributes: true, attributeFilter: ['data-tema'] })
   try {
     const r = await fetch('/elmo-punti.json')
     const j = await r.json()
@@ -312,6 +374,7 @@ onMounted(async () => {
   } catch {
     return
   }
+  await preparaMotore()
   osservatore = new IntersectionObserver(([v]) => { visibile = v.isIntersecting; avvia() })
   osservatore.observe(contenitore.value)
   document.addEventListener('visibilitychange', cambiaVisibilita)
@@ -323,7 +386,10 @@ onBeforeUnmount(() => {
   cancelAnimationFrame(raf)
   osservatore?.disconnect()
   ro?.disconnect()
+  osservaTema?.disconnect()
   document.removeEventListener('visibilitychange', cambiaVisibilita)
+  gpu?.distruggi()
+  gpu = null
 })
 </script>
 
@@ -332,9 +398,10 @@ onBeforeUnmount(() => {
     ref="contenitore"
     class="nuvola"
     :class="{ 'nuvola--pronta': pronto }"
+    :data-motore="motore || null"
     @pointermove="muovi"
     @pointerleave="esci"
-    @click="lanciaCarica(performance.now())"
+    @click="clic"
   >
     <img
       ref="paladinoEl"
@@ -345,7 +412,7 @@ onBeforeUnmount(() => {
       width="128"
       height="124"
     />
-    <canvas ref="tela" role="img" aria-label="L'elmo di Age of Empires Italia disegnato con migliaia di punti, che si inclina seguendo il puntatore" />
+    <canvas :key="chiaveTela" ref="tela" role="img" aria-label="L'elmo di Age of Empires Italia disegnato con migliaia di punti, che si inclina seguendo il puntatore" />
     <button
       v-if="pronto && animata !== false"
       type="button"

@@ -1,5 +1,24 @@
 [
  {
+  "mode": "redesign",
+  "depth": "restyle",
+  "scope": "site",
+  "theme": "vantage",
+  "shape": "landing + app screens",
+  "signature": "asta dal vivo: puntate, rose che si riordinano, timer ad anello e presenze via SignalR; elmo a punti in WebGPU con scie",
+  "prompt": "sito FantaAge più dinamico e moderno, con WebGPU",
+  "sections": [
+   "/",
+   "/asta",
+   "/asta/gestisci",
+   "/asta/inizia"
+  ],
+  "waived": [
+   "62 (classi di transizione Vue, risolto animando da visibile)"
+  ],
+  "date": "2026-11-26"
+ },
+ {
   "shape": "Split Studio",
   "theme": "vantage",
   "scope": "page",

@@ -4,6 +4,7 @@ import { api } from '../api.js'
 import { sessione, impostazioniPredefinite } from '../sessione.js'
 import NuvolaElmo from '../componenti/NuvolaElmo.vue'
 import UnitaAoe from '../componenti/UnitaAoe.vue'
+import NumeroVivo from '../componenti/NumeroVivo.vue'
 import ConfermaIscrizione from '../componenti/ConfermaIscrizione.vue'
 
 // Fatti dall'handbook del Fanta Age 2025 (5ª edizione) e dai fogli 2024 e 2025.
@@ -108,22 +109,22 @@ const descrizioneBarre = computed(() => {
           <dl class="numeri">
             <div class="numero angoli">
               <dt>Giocatori attivi negli ultimi 90 giorni</dt>
-              <dd class="num">{{ n(stat?.numeri.attivi90) }}</dd>
+              <dd class="num"><NumeroVivo :valore="stat?.numeri.attivi90 ?? null" alla-vista :durata="900" /></dd>
               <small>su {{ n(stat?.numeri.giocatoriTotali) }} passati dal server</small>
             </div>
             <div class="numero">
               <dt>Partite nell'ultimo mese</dt>
-              <dd class="num">{{ n(stat?.numeri.partite30) }}</dd>
+              <dd class="num"><NumeroVivo :valore="stat?.numeri.partite30 ?? null" alla-vista :durata="900" /></dd>
               <small>{{ n(stat?.numeri.partite7) }} negli ultimi sette giorni</small>
             </div>
             <div class="numero">
               <dt>Partite registrate</dt>
-              <dd class="num">{{ n(stat?.numeri.partiteValide) }}</dd>
+              <dd class="num"><NumeroVivo :valore="stat?.numeri.partiteValide ?? null" alla-vista :durata="900" /></dd>
               <small>l'ultima è il TG Dito {{ n(stat?.numeri.ultimoDito) }}</small>
             </div>
             <div class="numero">
               <dt>Ore di gioco</dt>
-              <dd class="num">{{ n(ore) }}</dd>
+              <dd class="num"><NumeroVivo :valore="ore" alla-vista :durata="900" /></dd>
               <small>contando solo il tempo in partita</small>
             </div>
           </dl>
@@ -132,6 +133,8 @@ const descrizioneBarre = computed(() => {
               <rect
                 v-for="(b, i) in barre"
                 :key="b.inizio"
+                class="settimane__barra"
+                :style="{ '--i': i }"
                 :x="i * 20 + 2"
                 :y="62 - Math.max(1, b.h * 58)"
                 width="14"

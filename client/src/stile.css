@@ -2,6 +2,7 @@
  * nav: top bar, wordmark and five destinations, sign-in on the right · signature: un'asta di prova giocabile con giocatori veri (landing), l'elmo di AoE Italia in nuvola di punti; il tabellone dal vivo (pannelli) · shape: Split Studio (/), draw f794b1 · hero: Banner (/) · states: loading, empty, error, full · vantage: terrain/steel
  * axes: dark/grotesk-sans/chromatic-green · posture: restrained · contrast: pass · brand: AoE Italia logo (navy paper, tricolour green signal, red for losses) · v2.0.0 */
 /* Hallmark · pre-emit critique: P4 H4 E4 S4 R5 V4 · weakest: P, the role doors have no working sign-in yet; each door says plainly what it will hold and that Discord sign-in comes next, instead of faking a login */
+/* Hallmark · redesign: restyle, solo movimento (2026-11-26, branch sito-dinamico) · motion: passaggi tra pagine (View Transitions), numeri che scorrono, asta dal vivo (puntate, rose, timer ad anello, presenze), elmo in WebGPU con scie e ripiego 2D · cursore personalizzato non più predefinito · dettagli in movimento.css */
 @import url("./tokens.css");
 @import url("./base.css");
 
@@ -253,6 +254,7 @@ tr.vivo td.pos { color: var(--color-accent); }
 
 .ancora { display: flex; justify-content: center; padding-top: var(--space-lg); }
 
+.piede a { white-space: nowrap; }
 .piede { border-top: var(--rule-hair) solid var(--color-rule); padding-block: var(--space-lg); color: var(--color-muted); font-size: var(--text-sm); }
 .piede .container { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-sm); }
 

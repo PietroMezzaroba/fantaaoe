@@ -4,6 +4,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { api, apiPost } from '../api.js'
 import StatoDati from './StatoDati.vue'
 import FinestraModale from './FinestraModale.vue'
+import NumeroVivo from './NumeroVivo.vue'
 import { ascoltaAsta } from '../astaLive.js'
 
 // quattro = true: sempre 4 finestre per riga; se il contenitore è stretto, tutto (testi compresi) si rimpicciolisce
@@ -34,11 +35,37 @@ const squadre = ref([])
 const caricamento = ref(true)
 const errore = ref('')
 
+// movimento (movimento.css): la squadra che ha appena comprato si illumina un attimo e il giocatore nuovo entra nella rosa
+const squadreAppena = ref(new Set())
+const giocatoriNuovi = ref(new Set())
+// le righe scorrono solo quando le rose cambiano davvero (acquisto o acquisto eliminato), non quando cambia lo zoom
+const animaRighe = ref(false)
+let spegniLampi = 0
+function segnaNovita(prima, dopo) {
+  if (!prima.length) return
+  const creditoPrima = new Map(prima.map((s) => [s.id, s.credito]))
+  const acquisti = (lista) => lista.flatMap((s) => s.giocatori.map((g) => g.idAcquisto)).filter(Boolean)
+  const acquistiPrima = new Set(acquisti(prima))
+  const acquistiDopo = acquisti(dopo)
+  squadreAppena.value = new Set(dopo.filter((s) => creditoPrima.has(s.id) && s.credito < creditoPrima.get(s.id)).map((s) => s.id))
+  giocatoriNuovi.value = new Set(acquistiDopo.filter((id) => !acquistiPrima.has(id)))
+  animaRighe.value = giocatoriNuovi.value.size > 0 || acquistiDopo.length !== acquistiPrima.size
+  clearTimeout(spegniLampi)
+  spegniLampi = setTimeout(() => { squadreAppena.value = new Set(); giocatoriNuovi.value = new Set(); animaRighe.value = false }, 1800)
+}
+onBeforeUnmount(() => clearTimeout(spegniLampi))
+
+// chiave stabile di una riga: il giocatore resta lo stesso elemento quando la rosa si riordina (così scorre al suo posto);
+// le righe vuote sono contate dal fondo, così quando arriva un giocatore sparisce solo la prima vuota
+const chiaveRiga = (s, g, i) => (g ? (g.idAcquisto ? `a${g.idAcquisto}` : `c${s.id}-${g.nome}`) : `v${righeComuni.value - 1 - i}`)
+
 async function carica(silenzioso = false) {
   if (!silenzioso) caricamento.value = true
   errore.value = ''
   try {
-    squadre.value = await api('asta/squadre')
+    const nuove = await api('asta/squadre')
+    if (silenzioso) segnaNovita(squadre.value, nuove)
+    squadre.value = nuove
   } catch (e) {
     errore.value = e.message
   } finally {
@@ -132,10 +159,10 @@ function righe(squadra) {
     @riprova="carica"
   >
     <div ref="contenitore" class="squadre-contenitore" :class="{ quattro }"><div class="squadre" :style="quattro ? { zoom: scala } : null">
-      <section v-for="s in squadre" :key="s.id" class="squadra" :aria-labelledby="`squadra-${s.id}`">
+      <section v-for="s in squadre" :key="s.id" class="squadra" :class="{ appena: squadreAppena.has(s.id) }" :aria-labelledby="`squadra-${s.id}`">
         <header class="squadra__testa">
           <p class="squadra__credito" title="Crediti rimasti">
-            <strong>{{ s.credito ?? '—' }}</strong>
+            <strong><NumeroVivo :valore="s.credito" /></strong>
             <span>crediti</span>
           </p>
           <h2 :id="`squadra-${s.id}`" class="squadra__nome">{{ s.nome }}</h2>
@@ -144,11 +171,11 @@ function righe(squadra) {
         <div class="squadra__colonne" aria-hidden="true">
           <span></span><span>Giocatore</span><span class="num">ELO</span><span class="num">Costo</span>
         </div>
-        <ol class="squadra__elenco">
+        <TransitionGroup tag="ol" :name="animaRighe ? 'riga' : 'riga-ferma'" class="squadra__elenco">
           <li
             v-for="(g, i) in righe(s)"
-            :key="i"
-            :class="g ? [g.capitano && 'capitano', fascia(i), puoEliminareRiga(g) && 'eliminabile'] : 'vuota'"
+            :key="chiaveRiga(s, g, i)"
+            :class="g ? [g.capitano && 'capitano', fascia(i), puoEliminareRiga(g) && 'eliminabile', giocatoriNuovi.has(g.idAcquisto) && 'nuovo'] : 'vuota'"
             @contextmenu="suClickDestro($event, s, g)"
           >
             <span class="squadra__numero" aria-hidden="true">{{ i + 1 }}</span>
@@ -159,15 +186,15 @@ function righe(squadra) {
             <span class="squadra__num">{{ g?.elo }}</span>
             <span class="squadra__num">{{ g?.costo }}</span>
           </li>
-        </ol>
+        </TransitionGroup>
         <div class="squadra__totali" :aria-label="`Totali di ${s.nome}: ELO medio ${eloMedio(s)}, costo totale ${costoTotale(s)}`">
           <span></span><span></span>
           <span class="squadra__tot" title="ELO medio">
-            <strong>{{ eloMedio(s) }}</strong>
+            <strong><NumeroVivo :valore="typeof eloMedio(s) === 'number' ? eloMedio(s) : null" /></strong>
             <span>elo medio</span>
           </span>
           <span class="squadra__tot" title="Costo totale">
-            <strong>{{ costoTotale(s) }}</strong>
+            <strong><NumeroVivo :valore="costoTotale(s)" /></strong>
             <span>costo totale</span>
           </span>
         </div>
@@ -284,4 +311,23 @@ function righe(squadra) {
 .conferma-elimina p { margin: 0; }
 .conferma-elimina__errore { color: var(--color-danger, #e5484d); }
 .conferma-elimina__azioni { display: flex; justify-content: flex-end; gap: var(--space-xs); }
+
+/* ---------- movimento ---------- */
+/* la rosa si riordina per ELO: chi cambia posto scivola nella riga nuova */
+.riga-move { transition: transform var(--dur-long) var(--ease-out); }
+/* il giocatore appena comprato entra da sinistra e la sua riga si accende di verde, poi si spegne */
+.riga-enter-active { transition: transform var(--dur-long) var(--ease-out); }
+.riga-enter-from { transform: translateX(-16px); }
+.squadra__elenco li.nuovo { position: relative; }
+.squadra__elenco li.nuovo::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: 2px;
+  background: var(--color-accent); opacity: 0; animation: riga-accesa 1.6s var(--ease-out) 1;
+}
+@keyframes riga-accesa { 0% { opacity: 0.55; } 100% { opacity: 0; } }
+/* la squadra che ha comprato: un bordo verde che si accende e si spegne */
+.squadra.appena::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  box-shadow: inset 0 0 0 2px var(--color-accent); opacity: 0; animation: squadra-accesa 1.6s var(--ease-out) 1;
+}
+@keyframes squadra-accesa { 0%, 30% { opacity: 1; } 100% { opacity: 0; } }
 </style>
