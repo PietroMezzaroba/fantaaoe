@@ -49,7 +49,7 @@ onMounted(async () => {
       <div class="barra__accedi">
         <BarraAudio v-if="sessione.caricata && audioAbilitato" />
         <div v-if="sessione.autenticato" class="utente">
-          <RouterLink to="/profilo" class="utente__profilo" :title="'Il tuo profilo'" :aria-label="`Il tuo profilo: ${sessione.nome}`">
+          <RouterLink to="/io" class="utente__profilo" title="La tua pagina" :aria-label="`La tua pagina: ${sessione.nome}`">
             <img v-if="sessione.avatar" class="utente__foto" :src="sessione.avatar" alt="" width="32" height="32" />
             <span class="utente__nome">{{ sessione.nome }}</span>
           </RouterLink>

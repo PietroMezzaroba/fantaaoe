@@ -7,8 +7,6 @@ import { applicaTemaIniziale } from './tema.js'
 import { api } from './api.js'
 
 import Landing from './pagine/Landing.vue'
-import Casa from './pagine/Casa.vue'
-import Pannello from './pagine/Pannello.vue'
 import Classifica from './pagine/Classifica.vue'
 import Giocatore from './pagine/Giocatore.vue'
 import Partite from './pagine/Partite.vue'
@@ -16,6 +14,7 @@ import Partita from './pagine/Partita.vue'
 import Civilta from './pagine/Civilta.vue'
 import Torneo from './pagine/Torneo.vue'
 import ProfiloUtente from './pagine/ProfiloUtente.vue'
+import LaTuaPagina from './pagine/LaTuaPagina.vue'
 import Admin from './pagine/Admin.vue'
 import Asta from './pagine/Asta.vue'
 import AstaCapitano from './pagine/AstaCapitano.vue'
@@ -25,8 +24,10 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: Landing, meta: { titolo: 'FantaAge, Age of Empires Italia', pieno: true } },
-    { path: '/pannelli', component: Casa, meta: { titolo: 'Pannelli, FantaAge' } },
-    { path: '/pannello/:ruolo', component: Pannello, props: true },
+    // «La tua pagina» prende il posto dei vecchi pannelli per ruolo (Casa.vue e Pannello.vue restano nel repo, non più raggiungibili)
+    { path: '/io', component: LaTuaPagina, meta: { titolo: 'La tua pagina, FantaAge' } },
+    { path: '/pannelli', redirect: '/io' },
+    { path: '/pannello/:ruolo', redirect: '/io' },
     { path: '/profilo', component: ProfiloUtente, meta: { titolo: 'Il tuo profilo, FantaAge' } },
     { path: '/admin', component: Admin, meta: { titolo: 'Admin, FantaAge', pieno: true } },
     { path: '/asta', component: Asta, meta: { titolo: 'Asta, FantaAge' } },
