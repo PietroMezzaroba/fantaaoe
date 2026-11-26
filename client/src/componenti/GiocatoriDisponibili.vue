@@ -98,13 +98,14 @@ const visibili = computed(() => {
       testo-vuoto="Non ci sono giocatori disponibili."
       @riprova="carica"
     >
-      <ul v-if="visibili.length" class="disponibili__elenco">
+      <!-- chi viene chiamato esce dalla lista e gli altri salgono scorrendo; mentre si cerca la lista cambia di colpo -->
+      <TransitionGroup v-if="visibili.length" tag="ul" :name="ricerca ? 'disponibile-ferma' : 'disponibile'" class="disponibili__elenco">
         <li v-for="g in visibili" :key="g.idDiscord">
           <span class="disponibili__nome" :title="g.nome">{{ g.nome }}</span>
           <span class="disponibili__elo">{{ g.elo }}</span>
           <button v-if="chiamabile" type="button" class="btn btn--sm disponibili__chiama" :disabled="!tuoTurno" :title="tuoTurno ? '' : 'Non è il tuo turno'" :aria-label="`Fai un'offerta per ${g.nome}`" @click="apri(g)">Offri</button>
         </li>
-      </ul>
+      </TransitionGroup>
       <p v-else class="muto piccolo">Nessun giocatore corrisponde a «{{ ricerca }}».</p>
     </StatoDati>
   </section>
@@ -153,4 +154,11 @@ const visibili = computed(() => {
 .offerta__azioni { display: flex; justify-content: flex-end; gap: var(--space-xs); }
 .disponibili__nome { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .disponibili__elo { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* ---------- movimento ---------- */
+/* chi esce scivola fuori a destra: niente barra orizzontale mentre passa */
+.disponibili__elenco { position: relative; overflow-x: hidden; }
+.disponibile-move { transition: transform var(--dur-long) var(--ease-out); }
+.disponibile-leave-active { position: absolute; left: 0; right: 0; transition: transform var(--dur-short) var(--ease-in); }
+.disponibile-leave-to { transform: translateX(110%); }
 </style>
