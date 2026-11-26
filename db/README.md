@@ -1,5 +1,7 @@
 # Database locale per sviluppo
 
+> **Produzione:** le modifiche allo schema del server stanno in `db/migrazioni/`, un file per rilascio, da lanciare *prima* di pubblicare il codice che le usa. Ricordati i `GRANT` per l'utente del sito (`fanta_lettura`): sulle tabelle nuove non li riceve da solo.
+
 Per lavorare sul backend ASP.NET Core in locale senza toccare il server:
 
 ## 1. Crea il database PostgreSQL
