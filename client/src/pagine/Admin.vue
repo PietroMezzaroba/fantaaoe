@@ -1,14 +1,41 @@
 <script setup>
 // Area di gestione riservata agli admin: una scheda a tab a tutta larghezza con le tabelle del database.
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onBeforeUnmount } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { api, apiPost, apiPut, apiDelete, data } from '../api.js'
 import { sessione } from '../sessione.js'
+import { ascoltaOnline } from '../astaLive.js'
 import StatoDati from '../componenti/StatoDati.vue'
 import FinestraModale from '../componenti/FinestraModale.vue'
 import TabellaDati from '../componenti/TabellaDati.vue'
+import PersoneOnline from '../componenti/admin/PersoneOnline.vue'
+import AssociazioniDiscord from '../componenti/admin/AssociazioniDiscord.vue'
 
-const tab = ref('squadre')
+const TAB_VALIDI = ['squadre', 'iscritti', 'utenti', 'associazioni', 'online', 'portafoglio', 'flusso', 'configurazioni']
+const route = useRoute()
+const router = useRouter()
+const tabDaUrl = (v) => (typeof v === 'string' && TAB_VALIDI.includes(v) ? v : 'squadre')
+const tab = ref(tabDaUrl(route.query.tab))
 const èAdmin = computed(() => sessione.autenticato && sessione.ruoli.includes('admin'))
+const onlineCount = ref(null)
+
+function selezionaTab(nuovo) {
+  tab.value = nuovo
+  if (route.query.tab !== nuovo) router.replace({ query: { ...route.query, tab: nuovo } }).catch(() => {})
+}
+
+watch(() => route.query.tab, (v) => {
+  if (typeof v === 'string' && TAB_VALIDI.includes(v) && v !== tab.value) tab.value = v
+})
+
+let smettiOnline = () => {}
+watch(èAdmin, (ok) => {
+  smettiOnline()
+  smettiOnline = () => {}
+  if (!ok) { onlineCount.value = null; return }
+  smettiOnline = ascoltaOnline((dati) => { onlineCount.value = dati?.totalePersone ?? null })
+}, { immediate: true })
+onBeforeUnmount(() => smettiOnline())
 
 const tabelle = {
   squadre: { percorso: 'admin/squadre', dati: ref([]), caricamento: ref(false), errore: ref(''), caricata: false },
@@ -88,7 +115,7 @@ async function carica(chiave) {
 
 // carica i dati della scheda la prima volta che la si apre (e quando la sessione risulta admin)
 watch([tab, èAdmin], () => {
-  if (èAdmin.value && !tabelle[tab.value].caricata) carica(tab.value)
+  if (èAdmin.value && tabelle[tab.value] && !tabelle[tab.value].caricata) carica(tab.value)
   if (èAdmin.value && tab.value === 'portafoglio') carica('configurazioni')
 }, { immediate: true })
 
@@ -306,7 +333,7 @@ const valore = (v) => (v === null || v === undefined || v === '' ? '—' : v)
           role="tab"
           :aria-selected="tab === 'squadre'"
           aria-controls="pannello-squadre"
-          @click="tab = 'squadre'"
+          @click="selezionaTab('squadre')"
         >
           Squadre
         </button>
@@ -316,7 +343,7 @@ const valore = (v) => (v === null || v === undefined || v === '' ? '—' : v)
           role="tab"
           :aria-selected="tab === 'iscritti'"
           aria-controls="pannello-iscritti"
-          @click="tab = 'iscritti'"
+          @click="selezionaTab('iscritti')"
         >
           Iscritti
         </button>
@@ -326,9 +353,29 @@ const valore = (v) => (v === null || v === undefined || v === '' ? '—' : v)
           role="tab"
           :aria-selected="tab === 'utenti'"
           aria-controls="pannello-utenti"
-          @click="tab = 'utenti'"
+          @click="selezionaTab('utenti')"
         >
           Utenti
+        </button>
+        <button
+          id="tab-associazioni"
+          type="button"
+          role="tab"
+          :aria-selected="tab === 'associazioni'"
+          aria-controls="pannello-associazioni"
+          @click="selezionaTab('associazioni')"
+        >
+          Discord ↔ Nick
+        </button>
+        <button
+          id="tab-online"
+          type="button"
+          role="tab"
+          :aria-selected="tab === 'online'"
+          aria-controls="pannello-online"
+          @click="selezionaTab('online')"
+        >
+          Online<span v-if="onlineCount != null" class="num"> ({{ onlineCount }})</span>
         </button>
         <button
           id="tab-portafoglio"
@@ -336,7 +383,7 @@ const valore = (v) => (v === null || v === undefined || v === '' ? '—' : v)
           role="tab"
           :aria-selected="tab === 'portafoglio'"
           aria-controls="pannello-portafoglio"
-          @click="tab = 'portafoglio'"
+          @click="selezionaTab('portafoglio')"
         >
           Portafoglio capitani
         </button>
@@ -346,7 +393,7 @@ const valore = (v) => (v === null || v === undefined || v === '' ? '—' : v)
           role="tab"
           :aria-selected="tab === 'flusso'"
           aria-controls="pannello-flusso"
-          @click="tab = 'flusso'"
+          @click="selezionaTab('flusso')"
         >
           Flusso asta
         </button>
@@ -356,7 +403,7 @@ const valore = (v) => (v === null || v === undefined || v === '' ? '—' : v)
           role="tab"
           :aria-selected="tab === 'configurazioni'"
           aria-controls="pannello-configurazioni"
-          @click="tab = 'configurazioni'"
+          @click="selezionaTab('configurazioni')"
         >
           Configurazioni
         </button>
@@ -436,6 +483,14 @@ const valore = (v) => (v === null || v === undefined || v === '' ? '—' : v)
             </template>
           </TabellaDati>
         </StatoDati>
+      </div>
+
+      <div v-else-if="tab === 'associazioni'" id="pannello-associazioni" class="scheda__corpo" role="tabpanel" aria-labelledby="tab-associazioni">
+        <AssociazioniDiscord />
+      </div>
+
+      <div v-else-if="tab === 'online'" id="pannello-online" class="scheda__corpo" role="tabpanel" aria-labelledby="tab-online">
+        <PersoneOnline />
       </div>
 
       <div v-else-if="tab === 'portafoglio'" id="pannello-portafoglio" class="scheda__corpo" role="tabpanel" aria-labelledby="tab-portafoglio">
@@ -654,6 +709,9 @@ const valore = (v) => (v === null || v === undefined || v === '' ? '—' : v)
 
 <style scoped>
 .admin { padding: var(--space-xl) var(--gutter) var(--space-2xl); }
+@media (max-width: 640px) {
+  .admin { padding: var(--space-lg) var(--space-sm) var(--space-xl); }
+}
 .scheda {
   width: 100%;
   border: var(--rule-hair) solid var(--color-rule-2);
@@ -664,11 +722,14 @@ const valore = (v) => (v === null || v === undefined || v === '' ? '—' : v)
 .scheda__tab {
   display: flex; gap: var(--space-2xs, 4px); padding: var(--space-xs) var(--space-xs) 0;
   border-bottom: var(--rule-hair) solid var(--color-rule-2);
+  overflow-x: auto; scrollbar-width: none;
 }
+.scheda__tab::-webkit-scrollbar { display: none; }
 .scheda__tab button {
   padding: var(--space-xs) var(--space-md); border: 0; background: transparent; color: var(--color-ink-2);
-  font: inherit; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  font: inherit; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; flex-shrink: 0;
 }
+.scheda__tab button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
 .scheda__tab button[aria-selected='true'] { color: var(--color-ink); border-bottom-color: currentColor; font-weight: 600; }
 .scheda__corpo { padding: var(--space-md); }
 .barra-azioni { display: flex; justify-content: flex-end; margin-bottom: var(--space-md); }

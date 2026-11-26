@@ -92,6 +92,7 @@ public class Program
             o.ClientTimeoutInterval = TimeSpan.FromSeconds(15);
         });
         builder.Services.AddSingleton<PresenzeAsta>();
+        builder.Services.AddSingleton<PresenzeSito>();
         builder.Services.AddSingleton<TimerAsta>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<TimerAsta>());
 

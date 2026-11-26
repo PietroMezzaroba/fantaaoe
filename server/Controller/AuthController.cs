@@ -20,11 +20,13 @@ public class AuthController : ControllerBase
     private readonly IWebHostEnvironment ambiente;
 
     private readonly PresenzeAsta presenze;
+    private readonly PresenzeSito sito;
     private readonly IHubContext<AstaHub> hub;
 
-    public AuthController(IWebHostEnvironment ambiente, ConfigAccesso accesso, PresenzeAsta presenze, IHubContext<AstaHub> hub, NpgsqlDataSource? db = null)
+    public AuthController(IWebHostEnvironment ambiente, ConfigAccesso accesso, PresenzeAsta presenze, PresenzeSito sito, IHubContext<AstaHub> hub, NpgsqlDataSource? db = null)
     {
         this.presenze = presenze;
+        this.sito = sito;
         this.hub = hub;
         this.ambiente = ambiente;
         this.db = db;
@@ -40,11 +42,16 @@ public class AuthController : ControllerBase
     [HttpGet("/api/auth/esci")]
     public async Task<IResult> Esci()
     {
-        // chi esce non è più sulla pagina dell'asta: lo si toglie subito dai presenti, senza aspettare che si chiuda il collegamento
+        // chi esce non è più sulla pagina dell'asta né tra gli utenti online: lo si toglie subito senza aspettare il timeout
         var utente = EAutenticato(User) ? DiscordId(User) : null;
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        if (utente is not null && presenze.RimuoviUtente(utente))
-            await hub.Clients.All.SendAsync(AstaHub.EventoPresenze, presenze.Elenco());
+        if (utente is not null)
+        {
+            var toltoAsta = presenze.RimuoviUtente(utente);
+            var toltoSito = sito.RimuoviUtente(utente);
+            if (toltoAsta) await hub.Clients.All.SendAsync(AstaHub.EventoPresenze, presenze.Elenco());
+            if (toltoSito || toltoAsta) await hub.Clients.Group(AstaHub.GruppoAdminOnline).SendAsync(AstaHub.EventoOnline, sito.Istantanea(presenze));
+        }
         return Results.Redirect("/");
     }
 

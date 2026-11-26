@@ -1,8 +1,9 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from './api.js'
 import { sessione, caricaSessione, linkAccesso, accedi } from './sessione.js'
+import { presenzaSito, aggiornaPaginaSito, riconnettiLive } from './astaLive.js'
 import BarraAudio from './componenti/BarraAudio.vue'
 import { audioAbilitato } from './suoni.js'
 import EffettiUi from './componenti/EffettiUi.vue'
@@ -10,8 +11,19 @@ import AccessoSviluppo from './componenti/AccessoSviluppo.vue'
 
 const route = useRoute()
 const handbook = ref(null)
+let fermaPresenza = () => {}
+
+watch(() => route.path, (p) => aggiornaPaginaSito(p))
+// se l'utente cambia dopo il caricamento iniziale senza ricaricare la pagina (login simulato in sviluppo), riapre il canale con i cookie nuovi
+watch(
+  () => [sessione.caricata, sessione.discordId],
+  ([caricata, nuovo], [eraCaricata, vecchio]) => {
+    if (caricata && eraCaricata && nuovo !== vecchio) riconnettiLive()
+  },
+)
 
 onMounted(async () => {
+  fermaPresenza = presenzaSito(route.path)
   caricaSessione()
   try {
     handbook.value = (await api('info')).handbook
@@ -19,6 +31,7 @@ onMounted(async () => {
     /* senza info il menu resta senza handbook */
   }
 })
+onBeforeUnmount(() => fermaPresenza())
 </script>
 
 <template>
