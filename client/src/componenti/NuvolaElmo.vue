@@ -328,6 +328,8 @@ function disegna(ora) {
     const s = (ora - carica.morto) / 1000
     const morte = sprite.meta.animazioni.morte, cad = sprite.meta.animazioni.cadavere
     const tMorte = morte.fotogrammi / morte.fps
+    // da morto sta davanti ai punti, così si vede anche se è caduto mentre era dietro l'elmo
+    if (paladinoEl.value) paladinoEl.value.style.zIndex = '3'
     if (s < tMorte) {
       disegnaPaladino('morte', Math.floor(s * morte.fps))
     } else if (s < tMorte + 3) {
