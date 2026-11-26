@@ -194,6 +194,47 @@ export function suonoAggiudicato() {
   })
 }
 
+// Colpo di spada sul paladino (PaladinoAoe): un clang metallico corto
+export function suonoColpo() {
+  if (!audioAttivo.value) return
+  const c = ottieniCtx()
+  if (!c) return
+  const now = c.currentTime
+  const vol = scalaGain()
+  ;[1567, 2349, 3136].forEach((freq, i) => {
+    const osc = c.createOscillator()
+    osc.type = i ? 'triangle' : 'square'
+    osc.frequency.setValueAtTime(freq, now)
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.92, now + 0.18)
+    const g = c.createGain()
+    g.gain.setValueAtTime(0.0001, now)
+    g.gain.linearRampToValueAtTime((i ? 0.05 : 0.035) * vol, now + 0.004)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.22 + i * 0.05)
+    osc.connect(g).connect(c.destination)
+    osc.start(now)
+    osc.stop(now + 0.32)
+  })
+}
+
+// Il paladino cade: un tonfo basso che si spegne
+export function suonoCaduta() {
+  if (!audioAttivo.value) return
+  const c = ottieniCtx()
+  if (!c) return
+  const now = c.currentTime
+  const vol = scalaGain()
+  const osc = c.createOscillator()
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(120, now)
+  osc.frequency.exponentialRampToValueAtTime(38, now + 0.5)
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.4 * vol, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.55)
+  osc.connect(g).connect(c.destination)
+  osc.start(now)
+  osc.stop(now + 0.6)
+}
+
 let ultimoHover = 0
 // Micro-tick tattile elegante al passaggio del mouse su bottoni e link
 export function suonoHover() {

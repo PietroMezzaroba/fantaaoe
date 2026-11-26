@@ -4,6 +4,7 @@ import { api } from '../api.js'
 import { sessione, impostazioniPredefinite } from '../sessione.js'
 import NuvolaElmo from '../componenti/NuvolaElmo.vue'
 import UnitaAoe from '../componenti/UnitaAoe.vue'
+import PaladinoAoe from '../componenti/PaladinoAoe.vue'
 import NumeroVivo from '../componenti/NumeroVivo.vue'
 import ConfermaIscrizione from '../componenti/ConfermaIscrizione.vue'
 
@@ -184,7 +185,7 @@ const descrizioneBarre = computed(() => {
             <span class="muto">{{ nota }}</span>
           </li>
         </ul>
-        <UnitaAoe tipo="paladino" didascalia="Paladino · clicca per attaccare" />
+        <PaladinoAoe />
       </div>
       <ol class="calendario riga__prova">
         <li v-for="[quando, cosa] in calendario2025" :key="cosa">
