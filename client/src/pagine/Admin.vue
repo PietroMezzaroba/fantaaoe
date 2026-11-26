@@ -57,6 +57,11 @@ const colonneFlusso = [
   { chiave: 'elo', titolo: 'ELO', formato: (c) => c.eloCalcolato ?? '—' }, // utenti_iscritti.elo_calcolato; '—' se il capitano non è iscritto
   { chiave: 'ordine', titolo: 'Ordine', classe: 'num', formato: (c) => String(ordineBozza[c.idDiscord] ?? c.ordine) },
 ]
+const colonneConfigurazioni = [
+  { chiave: 'chiave', titolo: 'Chiave', classe: 'forte' },
+  { chiave: 'valore', titolo: 'Valore' },
+  { chiave: 'descrizione', titolo: 'Descrizione' },
+]
 const colonneUtenti = [
   { chiave: 'nome', titolo: 'Nome', classe: 'forte' },
   { chiave: 'ruoli', titolo: 'Ruoli', formato: (u) => u.ruoliNomi?.join(', ') },
@@ -64,7 +69,7 @@ const colonneUtenti = [
 ]
 
 // i filtri a riga di ogni tabella stanno qui, così restano dopo un salvataggio o un cambio di scheda
-const filtriTabelle = { squadre: reactive({}), iscritti: reactive({}), utenti: reactive({}), portafoglio: reactive({}) }
+const filtriTabelle = { squadre: reactive({}), iscritti: reactive({}), utenti: reactive({}), portafoglio: reactive({}), configurazioni: reactive({}) }
 
 async function carica(chiave) {
   const t = tabelle[chiave]
@@ -191,6 +196,39 @@ function resettaCredito() {
   esegui(() => apiPost(`admin/portafoglio-capitani/${encodeURIComponent(c.idDiscord)}/reset`, {}), 'portafoglio')
 }
 
+// --- Configurazioni: si modifica solo il valore, in una finestra ---
+// Configurazioni con limiti particolari (le altre accettano qualsiasi testo); il server controlla le stesse regole
+const regoleConfigurazioni = {
+  credito_iniziale: { min: 0, max: 1000 },
+  timer_asta_secondi: { min: 1, max: 200 },
+  fase_flusso_asta: { valori: ['chiamata_giocatore', 'fase di acquisto', 'acquisto fatto'] },
+  stato_globale_asta: { valori: ['iscrizione', 'fine iscrizione', 'asta attiva', 'asta terminata', 'torneo avviato - fase 1'] },
+}
+const configurazioneForm = ref({ valore: '' })
+const regolaConfigurazione = computed(() => regoleConfigurazioni[modale.value?.configurazione?.chiave] ?? null)
+// valore ammesso? (campo vuoto o fuori dai limiti = no)
+const valoreConfigurazioneValido = computed(() => {
+  const r = regolaConfigurazione.value
+  const v = String(configurazioneForm.value.valore ?? '')
+  if (!r) return true
+  if (r.valori) return r.valori.includes(v)
+  return /^[0-9]+$/.test(v) && Number(v) >= r.min && Number(v) <= r.max
+})
+
+function apriConfigurazione(c) {
+  configurazioneForm.value = { valore: c.valore ?? '' }
+  apri({ tipo: 'configurazione', configurazione: c })
+}
+
+function salvaConfigurazione() {
+  if (!valoreConfigurazioneValido.value) return
+  const c = modale.value.configurazione
+  esegui(
+    () => apiPut(`admin/configurazioni/${encodeURIComponent(c.chiave)}`, { valore: String(configurazioneForm.value.valore ?? '') }),
+    'configurazioni',
+  )
+}
+
 // --- Flusso asta: ordine dei capitani (0 = non ordinato, da 1 a N le posizioni) ---
 const ordineBozza = reactive({}) // id_discord -> valore nel campo (anche non ancora valido)
 const erroreFlusso = ref('')
@@ -312,6 +350,16 @@ const valore = (v) => (v === null || v === undefined || v === '' ? '—' : v)
         >
           Flusso asta
         </button>
+        <button
+          id="tab-configurazioni"
+          type="button"
+          role="tab"
+          :aria-selected="tab === 'configurazioni'"
+          aria-controls="pannello-configurazioni"
+          @click="tab = 'configurazioni'"
+        >
+          Configurazioni
+        </button>
       </div>
 
       <div v-if="tab === 'squadre'" id="pannello-squadre" class="scheda__corpo" role="tabpanel" aria-labelledby="tab-squadre">
@@ -413,6 +461,29 @@ const valore = (v) => (v === null || v === undefined || v === '' ? '—' : v)
         </StatoDati>
       </div>
 
+      <div v-else-if="tab === 'configurazioni'" id="pannello-configurazioni" class="scheda__corpo" role="tabpanel" aria-labelledby="tab-configurazioni">
+        <StatoDati
+          :caricamento="tabelle.configurazioni.caricamento.value"
+          :errore="tabelle.configurazioni.errore.value"
+          :vuoto="!tabelle.configurazioni.dati.value.length"
+          testo-vuoto="Non c'è nessuna configurazione."
+          @riprova="carica('configurazioni')"
+        >
+          <TabellaDati
+            :filtri="filtriTabelle.configurazioni"
+            :colonne="colonneConfigurazioni"
+            :righe="tabelle.configurazioni.dati.value"
+            chiave-riga="chiave"
+            titolo="Configurazioni"
+            con-azioni
+          >
+            <template #azioni="{ riga }">
+              <button type="button" class="btn btn--linea" @click="apriConfigurazione(riga)">Modifica</button>
+            </template>
+          </TabellaDati>
+        </StatoDati>
+      </div>
+
       <div v-else id="pannello-flusso" class="scheda__corpo" role="tabpanel" aria-labelledby="tab-flusso">
         <StatoDati
           :caricamento="tabelle.flusso.caricamento.value"
@@ -470,6 +541,37 @@ const valore = (v) => (v === null || v === undefined || v === '' ? '—' : v)
         <div class="modulo__azioni">
           <button type="button" class="btn btn--linea" :disabled="occupato" @click="chiudi">Annulla</button>
           <button type="submit" class="btn" :disabled="occupato || !nome.trim()">{{ modale.squadra ? 'Salva' : 'Crea squadra' }}</button>
+        </div>
+      </form>
+    </FinestraModale>
+
+    <FinestraModale v-else-if="modale?.tipo === 'configurazione'" :titolo="`Modifica configurazione: ${modale.configurazione.chiave}`" @chiudi="chiudi">
+      <form class="modulo" @submit.prevent="salvaConfigurazione">
+        <p v-if="modale.configurazione.descrizione" class="muto">{{ modale.configurazione.descrizione }}</p>
+        <label class="modulo__campo">
+          <span>Valore</span>
+          <select v-if="regolaConfigurazione?.valori" v-model="configurazioneForm.valore" v-focus class="campo">
+            <option v-if="!valoreConfigurazioneValido" :value="configurazioneForm.valore" disabled>{{ configurazioneForm.valore || 'Scegli un valore' }} (non ammesso)</option>
+            <option v-for="v in regolaConfigurazione.valori" :key="v" :value="v">{{ v }}</option>
+          </select>
+          <input
+            v-else-if="regolaConfigurazione"
+            v-model="configurazioneForm.valore"
+            v-focus
+            type="number"
+            class="campo"
+            step="1"
+            :min="regolaConfigurazione.min"
+            :max="regolaConfigurazione.max"
+            required
+          />
+          <input v-else v-model="configurazioneForm.valore" v-focus class="campo" maxlength="1000" autocomplete="off" />
+          <small v-if="regolaConfigurazione && !regolaConfigurazione.valori" class="muto">Numero intero da {{ regolaConfigurazione.min }} a {{ regolaConfigurazione.max }}.</small>
+        </label>
+        <p v-if="erroreModale" class="esito esito--errore" role="alert">{{ erroreModale }}</p>
+        <div class="modulo__azioni">
+          <button type="button" class="btn btn--linea" :disabled="occupato" @click="chiudi">Annulla</button>
+          <button type="submit" class="btn" :disabled="occupato || !valoreConfigurazioneValido">Salva</button>
         </div>
       </form>
     </FinestraModale>

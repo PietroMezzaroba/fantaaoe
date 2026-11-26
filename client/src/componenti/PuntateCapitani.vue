@@ -7,6 +7,7 @@ import FinestraModale from './FinestraModale.vue'
 import NumeroVivo from './NumeroVivo.vue'
 import { sessione } from '../sessione.js'
 import { ascoltaAsta, presenzaPagina } from '../astaLive.js'
+import { moneta, caricaValuta } from '../valuta.js'
 
 // offerte = false: senza l'area "Fai un'offerta" (la pagina di gestione non può fare offerte)
 // streamer = true: area con "Termina offerta" e "Avvia nuova offerta" (pagina di gestione)
@@ -82,6 +83,7 @@ async function refresh() {
 let smettiDiAscoltare = () => {}
 let esciDallaPagina = () => {}
 onMounted(() => {
+  caricaValuta()
   refresh()
   smettiDiAscoltare = ascoltaAsta({ suEvento: (e) => {
     applica(e.puntate)
@@ -147,9 +149,9 @@ const messaggi = computed(() => {
   }
   for (const l of log.value) {
     const testo = {
-      chiamata: `${l.capitano} ha chiamato ${l.giocatore} con una prima offerta da ${l.valore}`,
-      offerta: `${l.capitano} ha offerto ${l.valore} per ${l.giocatore}`,
-      acquisto: `${l.capitano} si è aggiudicato ${l.giocatore} per ${l.valore}`,
+      chiamata: `${l.capitano} ha chiamato ${l.giocatore} con una prima offerta da ${l.valore} ${moneta.nome}`,
+      offerta: `${l.capitano} ha offerto ${l.valore} ${moneta.nome} per ${l.giocatore}`,
+      acquisto: `${l.capitano} si è aggiudicato ${l.giocatore} per ${l.valore} ${moneta.nome}`,
     }[l.tipo]
     if (testo) m.push({ chiave: `${l.tipo}-${l.quando}-${l.capitano}-${l.valore}`, testo, quando: ora(l.quando), tipo: l.tipo })
   }
@@ -267,7 +269,7 @@ const spazi = (c) => {
           {{ giocatoreInAsta || '—' }}
           <span v-if="giocatoreInAsta" class="puntate__elo" title="ELO">ELO {{ eloGiocatore }}</span>
         </dd></div>
-        <div><dt>Puntata massima:</dt><dd><NumeroVivo :valore="puntataMassima" :durata="400" /></dd></div>
+        <div><dt>Puntata massima:</dt><dd><NumeroVivo :valore="puntataMassima" :durata="400" /> {{ moneta.nome }}</dd></div>
       </dl>
       <div class="puntate__timer" :class="{ attivo: timerAttivo, urgente: timerInScadenza, pausa: inPausa }" role="timer" aria-label="Tempo rimasto">
         <svg class="puntate__timer-anello" viewBox="0 0 48 48" width="2.2em" height="2.2em" aria-hidden="true">
@@ -338,7 +340,7 @@ const spazi = (c) => {
     <div class="conferma">
       <p>Vuoi terminare l'offerta?</p>
       <p v-if="giocatoreInAsta && miglioreNome">
-        <strong>{{ giocatoreInAsta }}</strong> verrà assegnato a <strong>{{ miglioreNome }}</strong> per <strong>{{ puntataMassima }}</strong>.
+        <strong>{{ giocatoreInAsta }}</strong> verrà assegnato a <strong>{{ miglioreNome }}</strong> per <strong>{{ puntataMassima }} {{ moneta.nome }}</strong>.
       </p>
       <div class="conferma__azioni">
         <button v-focus type="button" class="btn btn--linea" @click="confermaTermina = false">Annulla</button>

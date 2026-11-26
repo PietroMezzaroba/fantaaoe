@@ -11,6 +11,8 @@ public sealed record RichiestaFlussoAsta(List<RichiestaOrdineCapitano>? Ordini);
 
 public sealed record RichiestaModificaIscritto(string? StatoValidazione, string? Note);
 
+public sealed record RichiestaConfigurazione(string? Valore);
+
 public sealed record RichiestaUtente(bool? Verificato, string[]? Ruoli);
 
 public sealed record RichiestaNomeSquadra(string? Nome, string? IdCapitano = null);
@@ -233,7 +235,7 @@ public class AdminController : ControllerBase
     // Il credito iniziale non è fisso nel codice: sta in fanta_torneo.configurazioni, chiave "credito_iniziale".
     private const string ChiaveCreditoIniziale = "credito_iniziale";
 
-    // Configurazioni globali (sola lettura per ora)
+    // Configurazioni globali
     [HttpGet("/api/admin/configurazioni")]
     public async Task<IResult> Configurazioni()
     {
@@ -244,6 +246,53 @@ public class AdminController : ControllerBase
         await using var c = await db.OpenConnectionAsync();
         var righe = await c.QueryAsync("select chiave, valore, descrizione from fanta_torneo.configurazioni order by chiave");
         return Results.Ok(righe);
+    }
+
+    private const int LunghezzaMaxValoreConfigurazione = 1000;
+
+    // Configurazioni con limiti particolari (le altre accettano qualsiasi testo): vanno tenute allineate a regoleConfigurazioni in Admin.vue
+    private static readonly Dictionary<string, string[]> ConfigurazioniASceltaFissa = new()
+    {
+        ["fase_flusso_asta"] = ["chiamata_giocatore", "fase di acquisto", "acquisto fatto"],
+        ["stato_globale_asta"] = ["iscrizione", "fine iscrizione", "asta attiva", "asta terminata", "torneo avviato - fase 1"],
+    };
+    private static readonly Dictionary<string, (int Min, int Max)> ConfigurazioniNumeriInteri = new()
+    {
+        ["credito_iniziale"] = (0, 1000),
+        ["timer_asta_secondi"] = (1, 200),
+    };
+
+    // Restituisce il testo dell'errore se il valore non è ammesso per quella configurazione, altrimenti null
+    private static string? ErroreValoreConfigurazione(string chiave, string valore)
+    {
+        if (ConfigurazioniASceltaFissa.TryGetValue(chiave, out var ammessi) && !ammessi.Contains(valore))
+            return $"Il valore di \"{chiave}\" può essere solo: {string.Join(", ", ammessi.Select(a => $"\"{a}\""))}.";
+        if (ConfigurazioniNumeriInteri.TryGetValue(chiave, out var limiti)
+            && !(int.TryParse(valore, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) && n >= limiti.Min && n <= limiti.Max))
+            return $"Il valore di \"{chiave}\" deve essere un numero intero da {limiti.Min} a {limiti.Max}.";
+        return null;
+    }
+
+    // Si modifica solo il valore: niente creazione, niente eliminazione, chiave e descrizione restano quelle del database.
+    [HttpPut("/api/admin/configurazioni/{chiave}")]
+    public async Task<IResult> ModificaConfigurazione(string chiave, RichiestaConfigurazione req)
+    {
+        if (db is null) return Results.Problem("Database non configurato", statusCode: 503);
+        if (!EAutenticato(User)) return Results.Unauthorized();
+        if (!EAdmin(User)) return Results.Forbid();
+
+        if (req.Valore is null)
+            return Results.BadRequest(new { errore = "Il valore è obbligatorio." });
+        if (req.Valore.Length > LunghezzaMaxValoreConfigurazione)
+            return Results.BadRequest(new { errore = $"Il valore può essere lungo al massimo {LunghezzaMaxValoreConfigurazione} caratteri." });
+
+        if (ErroreValoreConfigurazione(chiave, req.Valore) is { } erroreValore)
+            return Results.BadRequest(new { errore = erroreValore });
+
+        await using var c = await db.OpenConnectionAsync();
+        var righe = await c.ExecuteAsync(
+            "update fanta_torneo.configurazioni set valore = @valore where chiave = @chiave", new { valore = req.Valore, chiave });
+        return righe == 0 ? Results.NotFound(new { errore = "Configurazione non trovata." }) : Results.Ok(new { ok = true });
     }
 
     [HttpGet("/api/admin/portafoglio-capitani")]

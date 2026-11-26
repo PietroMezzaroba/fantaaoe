@@ -98,7 +98,7 @@ public class AstaController : ControllerBase
         if (credito is null)
             return Results.BadRequest(new { errore = "Non hai un portafoglio per l'asta." });
         if (puntata > credito)
-            return Results.BadRequest(new { errore = $"La puntata supera il tuo credito residuo ({credito})." });
+            return Results.BadRequest(new { errore = $"La puntata supera i tuoi {await LeggiValuta(c)} residui ({credito})." });
 
         var disponibile = await c.ExecuteScalarAsync<bool>("""
             select exists(select 1 from fanta_torneo.utenti_iscritti i
@@ -522,7 +522,7 @@ public class AstaController : ControllerBase
         if (credito is null)
             return Results.BadRequest(new { errore = "Non hai un portafoglio per l'asta." });
         if (puntata > credito)
-            return Results.BadRequest(new { errore = $"L'offerta ({puntata}) supera il tuo credito residuo ({credito})." });
+            return Results.BadRequest(new { errore = $"L'offerta ({puntata}) supera i tuoi {await LeggiValuta(c)} residui ({credito})." });
 
         await c.ExecuteAsync("""
             insert into fanta_torneo.asta_offerte (id_utente, id_chiamato_da, puntata, data_puntata)
@@ -537,6 +537,19 @@ public class AstaController : ControllerBase
 
     // Le squadre con il nome del capitano e i loro giocatori (asta_giocatori_acquistati): per ognuno nome, ELO e costo
     // di acquisto. Il capitano è anche un giocatore (a costo 0). L'ordine è per ELO decrescente.
+    // Nome della moneta dell'asta (configurazioni.valuta), per i testi delle pagine
+    [HttpGet("/api/asta/valuta")]
+    public async Task<IResult> Valuta()
+    {
+        if (db is null) return Results.Problem("Database non configurato", statusCode: 503);
+        if (!EAutenticato(User)) return Results.Unauthorized();
+        await using var c = await db.OpenConnectionAsync();
+        return Results.Ok(new { valuta = await LeggiValuta(c) });
+    }
+
+    private static async Task<string> LeggiValuta(NpgsqlConnection c) =>
+        await c.ExecuteScalarAsync<string?>("select valore from fanta_torneo.configurazioni where chiave = 'valuta'") ?? "Berlu";
+
     [HttpGet("/api/asta/squadre")]
     public async Task<IResult> Squadre()
     {

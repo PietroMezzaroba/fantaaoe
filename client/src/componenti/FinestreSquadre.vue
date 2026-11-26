@@ -6,6 +6,7 @@ import StatoDati from './StatoDati.vue'
 import FinestraModale from './FinestraModale.vue'
 import NumeroVivo from './NumeroVivo.vue'
 import { ascoltaAsta } from '../astaLive.js'
+import { moneta, caricaValuta } from '../valuta.js'
 
 // quattro = true: sempre 4 finestre per riga; se il contenitore è stretto, tutto (testi compresi) si rimpicciolisce
 // streamer = true: tasto destro su un giocatore acquistato per eliminare l'acquisto (solo a offerta terminata)
@@ -117,6 +118,7 @@ async function eliminaAcquisto() {
 // quando un'offerta si chiude il giocatore entra nella squadra: il server lo comunica (SignalR), le finestre si aggiornano senza polling
 let smettiDiAscoltare = () => {}
 onMounted(() => {
+  caricaValuta()
   carica()
   smettiDiAscoltare = ascoltaAsta({ suEvento: (e) => {
       if (e.puntate) fase.value = e.puntate.fase
@@ -161,9 +163,9 @@ function righe(squadra) {
     <div ref="contenitore" class="squadre-contenitore" :class="{ quattro }"><div class="squadre" :style="quattro ? { zoom: scala } : null">
       <section v-for="s in squadre" :key="s.id" class="squadra" :class="{ appena: squadreAppena.has(s.id) }" :aria-labelledby="`squadra-${s.id}`">
         <header class="squadra__testa">
-          <p class="squadra__credito" title="Crediti rimasti">
+          <p class="squadra__credito" :title="`${moneta.nome} rimasti`">
             <strong><NumeroVivo :valore="s.credito" /></strong>
-            <span>crediti</span>
+            <span>{{ moneta.nome }}</span>
           </p>
           <h2 :id="`squadra-${s.id}`" class="squadra__nome">{{ s.nome }}</h2>
           <p class="squadra__capitano" :class="{ muto: !s.capitano }">{{ s.capitano || 'Nessun capitano' }}</p>
@@ -222,10 +224,10 @@ function righe(squadra) {
     </div>
     <FinestraModale v-if="conferma" titolo="Elimina acquisto" @chiudi="conferma = null">
       <div class="conferma-elimina">
-        <p>Vuoi eliminare l'acquisto di <strong>{{ conferma.giocatore.nome }}</strong> ({{ conferma.squadra.nome }}, {{ conferma.giocatore.costo }} crediti)?</p>
+        <p>Vuoi eliminare l'acquisto di <strong>{{ conferma.giocatore.nome }}</strong> ({{ conferma.squadra.nome }}, {{ conferma.giocatore.costo }} {{ moneta.nome }})?</p>
         <p>
           Il giocatore tornerà disponibile, le sue offerte verranno cancellate e
-          <strong>{{ conferma.giocatore.costo }}</strong> crediti saranno restituiti a <strong>{{ conferma.squadra.capitano }}</strong>.
+          <strong>{{ conferma.giocatore.costo }}</strong> {{ moneta.nome }} saranno restituiti a <strong>{{ conferma.squadra.capitano }}</strong>.
         </p>
         <p v-if="erroreElimina" class="conferma-elimina__errore" role="alert">{{ erroreElimina }}</p>
         <div class="conferma-elimina__azioni">
