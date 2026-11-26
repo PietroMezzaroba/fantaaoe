@@ -20,8 +20,12 @@ export async function apiInvia(percorso, metodo, corpo) {
   })
   if (!r.ok) {
     let msg = `errore ${r.status}`
-    try { const j = await r.json(); if (j?.errore) msg = j.errore } catch {}
-    throw new Error(msg)
+    let dati = null
+    try { dati = await r.json(); if (dati?.errore) msg = dati.errore } catch {}
+    const err = new Error(msg)
+    err.status = r.status
+    err.dati = dati
+    throw err
   }
   return r.json()
 }
