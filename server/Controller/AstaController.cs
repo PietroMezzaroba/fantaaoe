@@ -41,9 +41,9 @@ public class AstaController : ControllerBase
     // I tasti "Offri" sono attivi solo se fase_flusso_asta = 'chiamata_giocatore' e l'utente connesso è questo capitano.
     private sealed record Turno_(bool InChiamata, string? IdCapitano, string? NomeCapitano);
 
-    private static async Task<Turno_> TrovaTurno(NpgsqlConnection c)
+    private static async Task<Turno_> TrovaTurno(NpgsqlConnection c, NpgsqlTransaction? tx = null)
     {
-        var fase = await c.ExecuteScalarAsync<string?>("select valore from fanta_torneo.configurazioni where chiave = 'fase_flusso_asta'");
+        var fase = await c.ExecuteScalarAsync<string?>("select valore from fanta_torneo.configurazioni where chiave = 'fase_flusso_asta'", transaction: tx);
         var capitano = await c.QueryFirstOrDefaultAsync<(string IdDiscord, string? Nome)?>("""
             select o.id_utente as iddiscord, u.discord_nome as nome
             from fanta_torneo.asta_ordine_capitani o
@@ -55,7 +55,7 @@ public class AstaController : ControllerBase
                           where ur.id_utente = o.id_utente and r.chiave_ruolo = 'capitano')
             order by (select count(*) from fanta_torneo.asta_giocatori_chiamati ch where ch.id_chiamato_da = o.id_utente), o.ordine
             limit 1
-            """);
+            """, transaction: tx);
         return new Turno_(fase == "chiamata_giocatore", capitano?.IdDiscord, capitano?.Nome);
     }
 
@@ -87,30 +87,32 @@ public class AstaController : ControllerBase
         if (req.Puntata is not int puntata || puntata < 0)
             return Results.BadRequest(new { errore = "La puntata deve essere un numero intero maggiore o uguale a 0." });
 
+        // chiamata, controlli, prima offerta e cambio di fase dentro la stessa transazione con blocco (niente doppi clic)
         await using var c = await db.OpenConnectionAsync();
-        var t = await TrovaTurno(c);
+        await using var tx = await c.BeginTransactionAsync();
+        await c.ExecuteAsync("select pg_advisory_xact_lock(727001)", transaction: tx);
+
+        var t = await TrovaTurno(c, tx);
         if (!t.InChiamata)
             return Results.Json(new { errore = "Non è il momento di chiamare un giocatore." }, statusCode: 409);
         if (t.IdCapitano != io)
             return Results.Json(new { errore = "Non è il tuo turno." }, statusCode: 403);
 
-        var credito = await c.ExecuteScalarAsync<int?>("select credito_residuo from fanta_torneo.asta_portafoglio_utente where id_utente = @io", new { io });
+        var credito = await c.ExecuteScalarAsync<int?>("select credito_residuo from fanta_torneo.asta_portafoglio_utente where id_utente = @io", new { io }, tx);
         if (credito is null)
             return Results.BadRequest(new { errore = "Non hai un portafoglio per l'asta." });
         if (puntata > credito)
-            return Results.BadRequest(new { errore = $"La puntata supera i tuoi {await LeggiValuta(c)} residui ({credito})." });
+            return Results.BadRequest(new { errore = $"La puntata supera i tuoi {await LeggiValuta(c, tx)} residui ({credito})." });
 
         var disponibile = await c.ExecuteScalarAsync<bool>("""
             select exists(select 1 from fanta_torneo.utenti_iscritti i
                           where i.id_discord = @id and i.stato_validazione = 'validato'
                             and not exists (select 1 from fanta_torneo.asta_giocatori_acquistati a where a.id_iscritto = i.id_discord)
                             and not exists (select 1 from fanta_torneo.asta_giocatori_chiamati h where h.id_utente = i.id_discord))
-            """, new { id = req.IdGiocatore });
+            """, new { id = req.IdGiocatore }, tx);
         if (!disponibile)
             return Results.Json(new { errore = "Il giocatore non è disponibile (non iscritto, non validato o già chiamato)." }, statusCode: 409);
 
-        // chiamata, prima offerta e cambio di fase vanno insieme: o si salva tutto o niente
-        await using var tx = await c.BeginTransactionAsync();
         await c.ExecuteAsync("""
             insert into fanta_torneo.asta_giocatori_chiamati (id_utente, id_chiamato_da, stato, costo_iniziale, data_inserimento)
             values (@id, @io, 'fase di acquisto', @puntata, now())
@@ -537,18 +539,17 @@ public class AstaController : ControllerBase
 
     // Le squadre con il nome del capitano e i loro giocatori (asta_giocatori_acquistati): per ognuno nome, ELO e costo
     // di acquisto. Il capitano è anche un giocatore (a costo 0). L'ordine è per ELO decrescente.
-    // Nome della moneta dell'asta (configurazioni.valuta), per i testi delle pagine
+    // Nome della moneta dell'asta (configurazioni.valuta), pubblico così anche chi guarda l'asta senza login vede la valuta configurata
     [HttpGet("/api/asta/valuta")]
     public async Task<IResult> Valuta()
     {
         if (db is null) return Results.Problem("Database non configurato", statusCode: 503);
-        if (!EAutenticato(User)) return Results.Unauthorized();
         await using var c = await db.OpenConnectionAsync();
         return Results.Ok(new { valuta = await LeggiValuta(c) });
     }
 
-    private static async Task<string> LeggiValuta(NpgsqlConnection c) =>
-        await c.ExecuteScalarAsync<string?>("select valore from fanta_torneo.configurazioni where chiave = 'valuta'") ?? "Berlu";
+    private static async Task<string> LeggiValuta(NpgsqlConnection c, NpgsqlTransaction? tx = null) =>
+        await c.ExecuteScalarAsync<string?>("select valore from fanta_torneo.configurazioni where chiave = 'valuta'", transaction: tx) ?? "Berlu";
 
     [HttpGet("/api/asta/squadre")]
     public async Task<IResult> Squadre()

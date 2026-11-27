@@ -1,5 +1,6 @@
 using Dapper;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Npgsql;
 using static FantaAoe.Api.TorneoUtil;
 
@@ -22,9 +23,17 @@ public sealed record RichiestaNomeSquadra(string? Nome, string? IdCapitano = nul
 public class AdminController : ControllerBase
 {
     private readonly NpgsqlDataSource? db;
+    private readonly CacheRuoli cacheRuoli;
+    private readonly PresenzeSito sito;
+    private readonly PresenzeAsta presenzeAsta;
+    private readonly IHubContext<AstaHub> hub;
 
-    public AdminController(NpgsqlDataSource? db = null)
+    public AdminController(CacheRuoli cacheRuoli, PresenzeSito sito, PresenzeAsta presenzeAsta, IHubContext<AstaHub> hub, NpgsqlDataSource? db = null)
     {
+        this.cacheRuoli = cacheRuoli;
+        this.sito = sito;
+        this.presenzeAsta = presenzeAsta;
+        this.hub = hub;
         this.db = db;
     }
 
@@ -150,6 +159,12 @@ public class AdminController : ControllerBase
                 new { id, verificato }, tx);
         if (ruoli is not null)
         {
+            // utenti_ruoli referenzia utenti_info: creiamo la riga se l'utente non ha mai fatto il primo login
+            await c.ExecuteAsync("""
+                insert into fanta_torneo.utenti_info (id_discord)
+                values (@id)
+                on conflict (id_discord) do nothing
+                """, new { id }, tx);
             await c.ExecuteAsync("""
                 delete from fanta_torneo.utenti_ruoli
                 where id_utente = @id
@@ -162,6 +177,26 @@ public class AdminController : ControllerBase
                 """, new { id, ruoli }, tx);
         }
         await tx.CommitAsync();
+
+        if (ruoli is not null)
+        {
+            cacheRuoli.Invalida(id);
+            var ruoliAggiornati = await cacheRuoli.Leggi(id) ?? ruoli;
+            var eraOnline = sito.AggiornaRuoli(id, ruoliAggiornati);
+            var conns = sito.ConnessioniDiUtente(id);
+            if (conns.Length > 0)
+            {
+                if (!ruoliAggiornati.Contains(Accesso.Admin))
+                {
+                    foreach (var cid in conns)
+                        await hub.Groups.RemoveFromGroupAsync(cid, AstaHub.GruppoAdminOnline);
+                }
+                await hub.Clients.Clients(conns).SendAsync(AstaHub.EventoRuoliAggiornati, ruoliAggiornati);
+            }
+            if (eraOnline)
+                await hub.Clients.Group(AstaHub.GruppoAdminOnline).SendAsync(AstaHub.EventoOnline, sito.Istantanea(presenzeAsta));
+        }
+
         return Results.Ok(new { ok = true });
     }
 
