@@ -7,6 +7,7 @@ import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr'
 
 const ascoltatori = new Set()
 const ascoltatoriOnline = new Set()
+const ascoltatoriRuoli = new Set()
 let sitoAttivo = 0 // quante radici dell'app tengono viva la presenza sul sito (0 o 1)
 let pagineConElenco = 0 // quante pagine con l'elenco dei capitani sono aperte (di solito 0 o 1)
 let paginaCorrente = '/'
@@ -64,6 +65,10 @@ function avvia() {
   c.on('sitoOnline', (istantanea) => {
     ultimoOnline = istantanea
     ascoltatoriOnline.forEach((a) => a.suOnline?.(istantanea))
+  })
+  // cambio ruoli live per l'utente connesso (da /admin o sincronizzazione Discord -> DB)
+  c.on('ruoliAggiornati', (ruoli) => {
+    ascoltatoriRuoli.forEach((fn) => fn(ruoli))
   })
 
   c.onreconnecting(() => {
@@ -180,6 +185,12 @@ export function ascoltaAsta(ascoltatore) {
     ascoltatori.delete(ascoltatore)
     chiudiSeInutile()
   }
+}
+
+// Notifica in tempo reale quando cambiano i ruoli dell'utente connesso (es. promosso capitano o admin)
+export function ascoltaRuoli(fn) {
+  ascoltatoriRuoli.add(fn)
+  return () => { ascoltatoriRuoli.delete(fn) }
 }
 
 // Solo per admin: riceve in diretta l'istantanea di chi è online sul sito ({ suOnline(dati), suStato(stato) }).

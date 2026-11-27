@@ -65,6 +65,7 @@ public sealed class AstaHub : Hub
     public const string EventoAggiornata = "astaAggiornata";
     public const string EventoPresenze = "astaPresenze";
     public const string EventoOnline = "sitoOnline";
+    public const string EventoRuoliAggiornati = "ruoliAggiornati";
     public const string GruppoAdminOnline = "admin-online";
 
     private sealed class LegameGiocatore
@@ -75,12 +76,14 @@ public sealed class AstaHub : Hub
 
     private readonly PresenzeAsta presenze;
     private readonly PresenzeSito sito;
+    private readonly CacheRuoli cacheRuoli;
     private readonly NpgsqlDataSource? db;
 
-    public AstaHub(PresenzeAsta presenze, PresenzeSito sito, NpgsqlDataSource? db = null)
+    public AstaHub(PresenzeAsta presenze, PresenzeSito sito, CacheRuoli cacheRuoli, NpgsqlDataSource? db = null)
     {
         this.presenze = presenze;
         this.sito = sito;
+        this.cacheRuoli = cacheRuoli;
         this.db = db;
     }
 
@@ -136,9 +139,16 @@ public sealed class AstaHub : Hub
     }
 
     // Solo gli admin possono iscriversi agli aggiornamenti in tempo reale di chi è online sul sito
+    // (controlla i ruoli vivi dal DB, così un utente appena promosso admin può seguire subito senza riconnettere il WebSocket)
     public async Task SeguiOnline(bool attivo)
     {
-        if (Context.User is not { } u || !EAdmin(u)) return;
+        var did = Utente();
+        if (did is null) return;
+        var ruoliVivi = await cacheRuoli.Leggi(did);
+        var admin = ruoliVivi is not null
+            ? ruoliVivi.Contains(Accesso.Admin)
+            : (Context.User is { } u && EAdmin(u));
+        if (!admin) return;
         if (attivo)
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, GruppoAdminOnline);

@@ -93,6 +93,9 @@ public class Program
         });
         builder.Services.AddSingleton<PresenzeAsta>();
         builder.Services.AddSingleton<PresenzeSito>();
+        builder.Services.AddSingleton<CacheRuoli>();
+        builder.Services.AddTransient<IClaimsTransformation, TrasformaRuoliDalDb>();
+        builder.Services.AddHostedService<OsservatoreRuoli>();
         builder.Services.AddSingleton<TimerAsta>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<TimerAsta>());
 

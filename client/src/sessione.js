@@ -23,7 +23,7 @@ export const impostazioniPredefinite = { audioAttivo: true, layoutScuro: true, c
 
 export async function caricaSessione() {
   try {
-    const r = await fetch('/api/io', { credentials: 'same-origin' })
+    const r = await fetch('/api/io', { credentials: 'same-origin', cache: 'no-store' })
     if (r.ok) {
       Object.assign(sessione, await r.json())
       // tema e audio seguono le impostazioni dell'utente; da non connessi valgono quelle predefinite

@@ -3,7 +3,7 @@ import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from './api.js'
 import { sessione, caricaSessione, linkAccesso, accedi } from './sessione.js'
-import { presenzaSito, aggiornaPaginaSito, riconnettiLive } from './astaLive.js'
+import { presenzaSito, aggiornaPaginaSito, riconnettiLive, ascoltaRuoli } from './astaLive.js'
 import BarraAudio from './componenti/BarraAudio.vue'
 import { audioAbilitato } from './suoni.js'
 import EffettiUi from './componenti/EffettiUi.vue'
@@ -12,6 +12,16 @@ import AccessoSviluppo from './componenti/AccessoSviluppo.vue'
 const route = useRoute()
 const handbook = ref(null)
 let fermaPresenza = () => {}
+let fermaRuoli = () => {}
+let ultimoControlloVisibile = 0
+
+function alRitornoSuScheda() {
+  if (document.visibilityState !== 'visible' || !sessione.autenticato) return
+  const adesso = Date.now()
+  if (adesso - ultimoControlloVisibile < 5000) return
+  ultimoControlloVisibile = adesso
+  caricaSessione()
+}
 
 watch(() => route.path, (p) => aggiornaPaginaSito(p))
 // se l'utente cambia dopo il caricamento iniziale senza ricaricare la pagina (login simulato in sviluppo), riapre il canale con i cookie nuovi
@@ -24,6 +34,8 @@ watch(
 
 onMounted(async () => {
   fermaPresenza = presenzaSito(route.path)
+  fermaRuoli = ascoltaRuoli(() => caricaSessione())
+  document.addEventListener('visibilitychange', alRitornoSuScheda)
   caricaSessione()
   try {
     handbook.value = (await api('info')).handbook
@@ -31,7 +43,11 @@ onMounted(async () => {
     /* senza info il menu resta senza handbook */
   }
 })
-onBeforeUnmount(() => fermaPresenza())
+onBeforeUnmount(() => {
+  fermaRuoli()
+  fermaPresenza()
+  document.removeEventListener('visibilitychange', alRitornoSuScheda)
+})
 </script>
 
 <template>

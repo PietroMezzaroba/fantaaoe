@@ -45,7 +45,7 @@ public sealed class PresenzeSito
         public string? Avatar { get; init; }
         public int? PlayerId { get; set; }
         public string? PlayerNick { get; set; }
-        public required string[] Ruoli { get; init; }
+        public required string[] Ruoli { get; set; }
         public string Pagina { get; set; } = "/";
         public DateTimeOffset ConnessoDal { get; init; }
         public DateTimeOffset UltimaAttivita { get; set; }
@@ -119,6 +119,41 @@ public sealed class PresenzeSito
             }
         }
         return trovato;
+    }
+
+    public bool AggiornaRuoli(string idDiscord, string[] ruoli)
+    {
+        var trovato = false;
+        lock (blocco)
+        {
+            foreach (var s in connessioni.Values)
+            {
+                if (s.IdDiscord != idDiscord) continue;
+                s.Ruoli = ruoli;
+                trovato = true;
+            }
+        }
+        return trovato;
+    }
+
+    public string[] ConnessioniDiUtente(string idDiscord)
+    {
+        lock (blocco)
+            return connessioni.Values.Where(x => x.IdDiscord == idDiscord).Select(x => x.IdConnessione).ToArray();
+    }
+
+    public Dictionary<string, string[]> UtentiConRuoli()
+    {
+        lock (blocco)
+        {
+            var res = new Dictionary<string, string[]>();
+            foreach (var s in connessioni.Values)
+            {
+                if (s.IdDiscord is not null && !res.ContainsKey(s.IdDiscord))
+                    res[s.IdDiscord] = s.Ruoli;
+            }
+            return res;
+        }
     }
 
     public bool Rimuovi(string idConnessione)
